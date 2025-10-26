@@ -1,7 +1,7 @@
 name: merchant_app
 description: "SOMA Offline Banking Demo — Merchant App (Foad version) - Real Bluetooth & QR"
 publish_to: "none"
-version: 0.2.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -15,6 +15,7 @@ dependencies:
   flutter_bluetooth_serial: ^0.4.0
   mobile_scanner: ^3.0.0
   uuid: ^3.0.7
+  qr_flutter: ^4.1.0  # ✅ پکیج نمایش QR تصویری
 
 dev_dependencies:
   flutter_test:
