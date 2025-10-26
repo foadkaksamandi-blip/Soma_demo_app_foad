@@ -1,169 +1,141 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../services/local_db.dart';
 
 class BluetoothPayScreen extends StatefulWidget {
-  const BluetoothPayScreen({super.key});
+  final int enteredAmountRials;
+  const BluetoothPayScreen({super.key, this.enteredAmountRials = 0});
 
   @override
   State<BluetoothPayScreen> createState() => _BluetoothPayScreenState();
 }
 
 class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
-  final TextEditingController _amountCtrl = TextEditingController();
+  final FlutterBluePlus _blue = FlutterBluePlus.instance;
   BluetoothDevice? _selected;
-  BluetoothConnection? _connection;
-  bool _busy = false;
-  String? _status;
-  String? _txnId;
+  BluetoothConnectionState _state = BluetoothConnectionState.disconnected;
+  String? _txId;
 
-  void _show(String msg, {bool ok = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87),
-    );
-  }
-
-  Future<void> _ensureBtOn() async {
-    final enabled = await FlutterBluetoothSerial.instance.isEnabled;
-    if (!(enabled ?? false)) {
-      await FlutterBluetoothSerial.instance.requestEnable();
-    }
-  }
-
-  Future<void> _loadBonded() async {
-    await _ensureBtOn();
-    final bonded = await FlutterBluetoothSerial.instance.getBondedDevices();
-    if (bonded.isEmpty) {
-      _show('هیچ دستگاه جفت‌شده‌ای پیدا نشد. ابتدا دستگاه فروشنده را Pair کنید.');
-      return;
-    }
-    final dev = await showModalBottomSheet<BluetoothDevice>(
-      context: context,
-      builder: (_) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: ListView(
-          children: bonded
-              .map((d) => ListTile(
-                    title: Text(d.name ?? d.address),
-                    subtitle: Text(d.address),
-                    onTap: () => Navigator.pop(context, d),
-                  ))
-              .toList(),
-        ),
-      ),
-    );
-    if (dev != null) setState(() => _selected = dev);
-  }
-
-  Future<void> _pay() async {
-    final amount = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    if (amount <= 0) {
-      _show('مبلغ را وارد کنید.');
-      return;
-    }
-    if (_selected == null) {
-      _show('ابتدا دستگاه فروشنده را انتخاب کنید.');
-      return;
-    }
-
-    setState(() {
-      _busy = true;
-      _status = 'در حال اتصال به ${_selected!.name ?? _selected!.address}';
+  @override
+  void initState() {
+    super.initState();
+    _blue.state.listen((s) {
+      if (mounted) setState(() {});
     });
+  }
+
+  Future<void> _scan() async {
+    setState(() => _selected = null);
+    await _blue.startScan(timeout: const Duration(seconds: 6));
+    // منتظر پایان اسکن
+    await Future.delayed(const Duration(seconds: 6));
+    await _blue.stopScan();
+
+    // انتخاب ساده: اولین دیوایس با نام قابل‌قبول
+    final results = await _blue.scanResults.first;
+    final match = results.map((e) => e.device).firstWhere(
+          (d) => (d.platformName.isNotEmpty || d.remoteId.str.isNotEmpty),
+          orElse: () => BluetoothDevice.fromId(''),
+        );
+
+    if (match.remoteId.str.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('دستگاهی یافت نشد')));
+      return;
+    }
+    setState(() => _selected = match);
+  }
+
+  Future<void> _connectAndPay() async {
+    if (_selected == null) return;
 
     try {
-      _connection = await BluetoothConnection.toAddress(_selected!.address);
-      setState(() => _status = 'اتصال ایمن برقرار شد.');
+      await _selected!.connect(timeout: const Duration(seconds: 10));
+      setState(() => _state = BluetoothConnectionState.connected);
 
-      final payload = jsonEncode({
-        'type': 'soma_payment',
-        'amount': amount,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-      _connection!.output.add(Uint8List.fromList(utf8.encode('$payload\n')));
-      await _connection!.output.allSent;
-
-      // منتظر پاسخ OK
-      final buffer = StringBuffer();
-      await for (final data in _connection!.input!.map(utf8.decode)) {
-        buffer.write(data);
-        if (buffer.toString().contains('\n')) break;
+      // در دمو: فقط تراکنش را روی دیوایس محلی ثبت می‌کنیم
+      final amount = widget.enteredAmountRials > 0
+          ? widget.enteredAmountRials
+          : 10000; // اگر کاربر وارد نکرد
+      if (LocalDB.instance.buyerBalance < amount) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('موجودی کافی نیست')),
+        );
+        return;
       }
-      final resp = buffer.toString().trim();
-      if (resp == 'OK') {
-        LocalDB.instance.addBuyerBalance(-amount);
-        final id = const Uuid().v4();
-        setState(() => _txnId = id);
-        _show('پرداخت موفق. کد تراکنش: $id', ok: true);
-      } else {
-        _show('پاسخ نامعتبر از فروشنده: $resp');
+
+      // کسر از خریدار، افزودن به فروشنده
+      LocalDB.instance.addBuyerBalance(-amount);
+      LocalDB.instance.addMerchantBalance(amount);
+
+      // شناسه تراکنش
+      _txId = const Uuid().v4();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('پرداخت موفق. کد تراکنش: $_txId'),
+            backgroundColor: const Color(0xFF27AE60),
+          ),
+        );
       }
     } catch (e) {
-      _show('خطا در اتصال/پرداخت: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطا در اتصال: $e')),
+      );
     } finally {
-      await _connection?.close();
-      _connection = null;
-      setState(() {
-        _busy = false;
-        _status = null;
-      });
+      await _selected?.disconnect();
+      setState(() => _state = BluetoothConnectionState.disconnected);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
+    const primary = Color(0xFF1ABC9C);
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('پرداخت با بلوتوث'),
-          backgroundColor: primaryTurquoise,
+          backgroundColor: primary,
           foregroundColor: Colors.white,
-          centerTitle: true,
         ),
         body: Padding(
           padding: const EdgeInsets.all(16),
-          child: ListView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('مبلغ پرداخت'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  hintText: 'مثلاً ۵۰۰۰۰۰',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+              ElevatedButton.icon(
+                onPressed: _scan,
+                icon: const Icon(Icons.search),
+                label: const Text('اسکن دستگاه‌ها'),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.bluetooth),
+                title: Text(_selected?.platformName.isNotEmpty == true
+                    ? _selected!.platformName
+                    : (_selected?.remoteId.str ?? 'دستگاه انتخاب نشده')),
+                subtitle: Text('وضعیت اتصال: $_state'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: _selected == null ? null : _connectAndPay,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
+                child: const Text('پرداخت'),
               ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _loadBonded,
-                icon: const Icon(Icons.bluetooth_searching),
-                label: Text(_selected == null
-                    ? 'انتخاب دستگاه فروشنده'
-                    : (_selected!.name ?? _selected!.address)),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _busy ? null : _pay,
-                icon: const Icon(Icons.send),
-                label: const Text('پرداخت'),
-              ),
-              if (_status != null) ...[
+              if (_txId != null) ...[
                 const SizedBox(height: 12),
-                Text(_status!),
-              ],
-              if (_txnId != null) ...[
-                const SizedBox(height: 12),
-                Text('کد تراکنش: $_txnId'),
-              ],
+                SelectableText('کد تراکنش: $_txId'),
+              ]
             ],
           ),
         ),
