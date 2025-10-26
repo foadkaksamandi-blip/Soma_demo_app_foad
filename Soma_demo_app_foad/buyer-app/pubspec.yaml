@@ -1,7 +1,7 @@
 name: buyer_app
 description: "SOMA Offline Banking Demo — Buyer App (Foad version) - Real Bluetooth & QR"
 publish_to: "none"
-version: 0.2.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
