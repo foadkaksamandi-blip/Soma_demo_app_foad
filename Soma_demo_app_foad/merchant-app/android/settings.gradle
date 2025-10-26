@@ -1,0 +1,15 @@
+rootProject.name = "merchant_app"
+
+include(":app")
+
+// ✅ Patch برای namespace نداشتن flutter_bluetooth_serial
+gradle.beforeProject { project ->
+    if (project.name == "flutter_bluetooth_serial") {
+        project.afterEvaluate {
+            if (!project.hasProperty("android")) return
+            project.android {
+                namespace = "com.soma.foad.merchant.bluetooth"
+            }
+        }
+    }
+}
