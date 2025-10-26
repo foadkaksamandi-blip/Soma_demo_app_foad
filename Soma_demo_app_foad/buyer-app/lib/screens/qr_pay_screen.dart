@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-class QrReceiptScreen extends StatelessWidget {
-  const QrReceiptScreen({super.key});
+class QrPayScreen extends StatelessWidget {
+  const QrPayScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>? ?? {};
-    final payload = args['payload'] as String? ?? '{}';
-    const Color successGreen = Color(0xFF27AE60);
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {};
+    final payload = args['payload'] as String? ?? '';
+    const successGreen = Color(0xFF27AE60);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -23,12 +23,11 @@ class QrReceiptScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              QrImageView(data: payload, size: 260),
+              QrImageView(data: payload.isEmpty ? 'PAYLOAD' : payload, size: 260),
               const SizedBox(height: 16),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text('لطفاً فروشنده این QR را اسکن کند تا دریافت نهایی ثبت شود.',
-                    textAlign: TextAlign.center),
+                child: Text('را اسکن کنید تا دریافت‌کننده روی اپ فروشنده تایید شود.'),
               ),
             ],
           ),
