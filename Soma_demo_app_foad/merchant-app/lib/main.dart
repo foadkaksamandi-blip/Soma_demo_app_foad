@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
-// صفحه تولید QR
 import 'screens/generate_qr_screen.dart';
+import 'services/local_db.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MerchantApp());
 }
 
@@ -32,7 +33,6 @@ class MerchantApp extends StatelessWidget {
       textTheme: const TextTheme(
         titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
         bodyMedium: TextStyle(fontSize: 16, color: textDark),
-        labelLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
       ),
     );
 
@@ -64,8 +64,14 @@ class MerchantHomePage extends StatefulWidget {
 }
 
 class _MerchantHomePageState extends State<MerchantHomePage> {
-  int balance = 0; // موجودی نمایشی
+  int balance = LocalDBMerchant.instance.merchantBalance;
   final TextEditingController amountCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    balance = LocalDBMerchant.instance.merchantBalance;
+  }
 
   @override
   void dispose() {
@@ -74,6 +80,12 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
   }
 
   String _format(int rials) => NumberFormat.decimalPattern('fa').format(rials);
+
+  void _refreshBalance() {
+    setState(() {
+      balance = LocalDBMerchant.instance.merchantBalance;
+    });
+  }
 
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -105,8 +117,6 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
             children: [
               Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
-
-              // موجودی
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -124,13 +134,16 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                           fontWeight: FontWeight.w700,
                           color: textDark,
                         )),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: _refreshBalance,
+                      style: ElevatedButton.styleFrom(backgroundColor: successGreen),
+                      child: const Text('بروزرسانی'),
+                    )
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // مبلغ فروش
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -155,7 +168,6 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
               Text('دریافت از طریق',
                   style: Theme.of(context)
@@ -163,22 +175,19 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                       .titleLarge!
                       .copyWith(color: successGreen)),
               const SizedBox(height: 8),
-
               _ActionCard(
                 icon: Icons.bluetooth_searching,
                 title: 'دریافت با بلوتوث',
                 color: primaryTurquoise,
-                onTap: () => _showSnack('اتصال بلوتوث در Batch بعدی فعال می‌شود.'),
+                onTap: () => _showSnack('برای دریافت بلوتوث، صفحه اتصال در Batch بعدی فعال می‌شود.'),
               ),
               const SizedBox(height: 8),
-
               _ActionCard(
                 icon: Icons.qr_code_2,
-                title: 'دریافت با QR کد (تولید QR)',
+                title: 'تولید QR برای اسکن خریدار',
                 color: successGreen,
                 onTap: () => Navigator.pushNamed(context, '/qr/generate'),
               ),
-
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -187,7 +196,7 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Text(
-                  'نسخه نمایشی — بدون اتصال بانکی • قابلیت‌های بلوتوث و QR در مراحل بعدی اضافه می‌شوند.',
+                  'برای تست واقعی QR و بلوتوث، دستگاه‌ها را آماده و جفت کنید؛ پس از تولید، QR واقعی نمایش داده می‌شود.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -199,8 +208,9 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
         backgroundColor: primaryTurquoise,
         foregroundColor: Colors.white,
         onPressed: () {
-          setState(() => balance += 150000);
-          _showSnack('۱۵۰٬۰۰۰ ریال به موجودی نمایشی فروشنده اضافه شد.', success: true);
+          LocalDBMerchant.instance.addMerchantBalance(150000);
+          _showSnack('۱۵۰٬۰۰۰ ریال به موجودی آزمایشی فروشنده اضافه شد.', success: true);
+          _refreshBalance();
         },
         label: const Text('افزایش موجودی آزمایشی'),
         icon: const Icon(Icons.add),
