@@ -1,4 +1,4 @@
-// Top-level build file for the buyer app (do NOT put `android {}` here)
+// Top-level Gradle build file
 buildscript {
     repositories {
         google()
@@ -7,7 +7,6 @@ buildscript {
     dependencies {
         classpath "com.android.tools.build:gradle:8.1.1"
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.10"
-        classpath "dev.flutter:flutter-gradle-plugin"
     }
 }
 
@@ -21,4 +20,8 @@ allprojects {
 rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
 }
