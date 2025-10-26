@@ -4,7 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
-import 'screens/qr_pay_screen.dart';
+import 'screens/qr_pay_screen.dart'; // این فایل کلاس QrReceiptScreen را اکسپورت می‌کند
 import 'services/local_db.dart';
 
 void main() {
@@ -33,8 +33,11 @@ class BuyerApp extends StatelessWidget {
         brightness: Brightness.light,
       ),
       textTheme: const TextTheme(
-        titleLarge:
-            TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
+        titleLarge: TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+          color: textDark,
+        ),
         bodyMedium: TextStyle(fontSize: 16, color: textDark),
       ),
     );
@@ -53,7 +56,8 @@ class BuyerApp extends StatelessWidget {
       routes: {
         '/': (_) => const BuyerHomePage(),
         '/pay/bluetooth': (_) => const BluetoothPayScreen(),
-        '/pay/qr': (_) => const QrPayScreen(), // مطمئن باش کلاس همین نام را دارد
+        // نام کلاس با فایل شما هماهنگ شد:
+        '/pay/qr': (_) => const QrReceiptScreen(),
       },
       initialRoute: '/',
     );
@@ -93,7 +97,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg), // ❗️بدون TextDirection.rtl
+        content: Text(msg), // بدون textDirection
         backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
       ),
     );
@@ -105,7 +109,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     const Color successGreen = Color(0xFF27AE60);
     const Color textDark = Color(0xFF0B2545);
 
-    return Directionality( // یک‌بار برای کل صفحه
+    return Directionality( // فقط یک‌بار برای کل صفحه
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
