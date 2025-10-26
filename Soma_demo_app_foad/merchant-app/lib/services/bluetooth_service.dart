@@ -1,45 +1,50 @@
 import 'dart:convert';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
-/// سرویس بلوتوث واقعی (Classic RFCOMM) برای فروشنده
-/// قابلیت‌ها: روشن‌کردن بلوتوث، قابل‌مشاهده کردن دستگاه، گوش‌دادن به اتصال ورودی، دریافت JSON
-class MerchantBluetoothService {
-  MerchantBluetoothService._();
-  static final MerchantBluetoothService instance = MerchantBluetoothService._();
+/// BuyerBluetoothService
+/// - اسکن دستگاه‌های جفت‌شده
+/// - اتصال به آدرس MAC
+/// - ارسال پیام JSON خط‌دار (\n)
+class BuyerBluetoothService {
+  BuyerBluetoothService._();
+  static final BuyerBluetoothService instance = BuyerBluetoothService._();
 
-  final FlutterBluetoothSerial _bluetooth = FlutterBluetoothSerial.instance;
+  final FlutterBluetoothSerial _bt = FlutterBluetoothSerial.instance;
   BluetoothConnection? _connection;
-  Stream<String>? _inbound;
 
   Future<bool> ensureEnabled() async {
-    final state = await _bluetooth.state;
+    final state = await _bt.state;
     if (state == BluetoothState.STATE_OFF) {
-      final enabled = await _bluetooth.requestEnable();
+      final enabled = await _bt.requestEnable();
       return enabled ?? false;
     }
     return true;
   }
 
-  /// فعال کردن discoverable تا خریدار دستگاه را ببیند (نیازمند تأیید کاربر در اندروید)
-  Future<bool> becomeDiscoverable({int seconds = 120}) async {
+  Future<List<BluetoothDevice>> scanDevices({Duration timeout = const Duration(seconds: 4)}) async {
     final ok = await ensureEnabled();
-    if (!ok) return false;
-    final allowed = await _bluetooth.requestDiscoverable(seconds);
-    return (allowed ?? 0) > 0;
+    if (!ok) return [];
+    try {
+      final bonded = await _bt.getBondedDevices();
+      return bonded;
+    } catch (_) {
+      return [];
+    }
   }
 
-  /// منتظر اتصال از طرف خریدار (با آدرس)
-  /// توجه: در RFCOMM غالباً یک آدرس مقصد لازم است؛ برای سادگی دمو، پس از discoverable شدن،
-  /// اتصال معمولاً توسط خریدار برقرار می‌شود و فروشنده فقط پیام‌ها را می‌خواند.
-  Future<void> setConnection(BluetoothConnection connection) async {
-    // در این دمو، اتصال می‌تواند از بیرون پاس داده شود یا با نقش سرور سفارشی پیاده‌سازی شود.
-    _connection = connection;
-    _inbound = _connection!.input!
-        .map((data) => utf8.decode(data))
-        .transform(const LineSplitter()); // پیام‌ها با \n جدا می‌شوند
+  Future<bool> connect(String address) async {
+    await disconnect();
+    try {
+      _connection = await BluetoothConnection.toAddress(address);
+      // optionally listen to input here
+      return _connection?.isConnected ?? false;
+    } catch (_) {
+      _connection = null;
+      return false;
+    }
   }
 
-  Stream<String>? get inboundLines => _inbound;
+  bool get isConnected => _connection?.isConnected ?? false;
 
   Future<void> disconnect() async {
     try {
@@ -47,5 +52,17 @@ class MerchantBluetoothService {
       _connection?.dispose();
     } catch (_) {}
     _connection = null;
+  }
+
+  Future<bool> sendJson(String jsonPayload) async {
+    if (_connection == null || !(_connection?.isConnected ?? false)) return false;
+    try {
+      final data = utf8.encode('$jsonPayload\n');
+      _connection!.output.add(data);
+      await _connection!.output.allSent;
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }
