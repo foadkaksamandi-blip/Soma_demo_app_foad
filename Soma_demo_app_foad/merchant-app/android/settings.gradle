@@ -1,15 +1,39 @@
-// Project-level build.gradle (minimal). Plugin versions are defined in settings.gradle.
-buildscript {
+pluginManagement {
+    def flutterSdkPath = System.getenv("FLUTTER_SDK")
+    if (flutterSdkPath == null) {
+        def localProperties = new Properties()
+        def localPropertiesFile = new File(rootDir, "local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
+            flutterSdkPath = localProperties.getProperty("flutter.sdk")
+        }
+    }
+    assert flutterSdkPath != null : "Flutter SDK not found. Define location with flutter.sdk in local.properties or set FLUTTER_SDK env var."
+
+    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
     repositories {
         google()
         mavenCentral()
+        gradlePluginPortal()
     }
-    dependencies { }
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
+plugins {
+    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+    id "com.android.application" version "8.1.1" apply false
+    id "com.android.library" version "8.1.1" apply false
+    id "org.jetbrains.kotlin.android" version "1.9.10" apply false
+}
+
+include(":app")
+
+// Patch namespace for flutter_bluetooth_serial on merchant side
+gradle.beforeProject { project ->
+    if (project.name == "flutter_bluetooth_serial") {
+        project.plugins.withId("com.android.library") {
+            if (!project.android.hasProperty("namespace") || !project.android.namespace) {
+                project.android.namespace = "com.soma.foad.merchant.bluetooth"
+            }
+        }
     }
 }
