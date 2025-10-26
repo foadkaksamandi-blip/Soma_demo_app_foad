@@ -1,10 +1,9 @@
-// Soma_demo_app_foad/buyer-app/lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
-import 'screens/qr_pay_screen.dart'; // این فایل کلاس QrReceiptScreen را اکسپورت می‌کند
+import 'screens/qr_pay_screen.dart';
 import 'services/local_db.dart';
 
 void main() {
@@ -33,11 +32,7 @@ class BuyerApp extends StatelessWidget {
         brightness: Brightness.light,
       ),
       textTheme: const TextTheme(
-        titleLarge: TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-          color: textDark,
-        ),
+        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
         bodyMedium: TextStyle(fontSize: 16, color: textDark),
       ),
     );
@@ -54,10 +49,9 @@ class BuyerApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
       ],
       routes: {
-        '/': (_) => const BuyerHomePage(),
-        '/pay/bluetooth': (_) => const BluetoothPayScreen(),
-        // نام کلاس با فایل شما هماهنگ شد:
-        '/pay/qr': (_) => const QrReceiptScreen(),
+        '/': (context) => const BuyerHomePage(),
+        '/pay/bluetooth': (context) => const BluetoothPayScreen(),
+        '/pay/qr': (context) => const QrPayScreen(),
       },
       initialRoute: '/',
     );
@@ -97,7 +91,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg), // بدون textDirection
+        content: Text(msg),
         backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
       ),
     );
@@ -109,7 +103,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     const Color successGreen = Color(0xFF27AE60);
     const Color textDark = Color(0xFF0B2545);
 
-    return Directionality( // فقط یک‌بار برای کل صفحه
+    return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
@@ -209,7 +203,8 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 icon: Icons.qr_code_2,
                 title: 'پرداخت با QR کد',
                 color: successGreen,
-                onTap: () => Navigator.pushNamed(context, '/pay/qr'),
+                onTap: () => Navigator.pushNamed(context, '/pay/qr',
+                    arguments: {'amount': amountCtrl.text}),
               ),
 
               const SizedBox(height: 24),
@@ -282,8 +277,7 @@ class _PaymentCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style:
-                      const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
               const Icon(Icons.chevron_left),
