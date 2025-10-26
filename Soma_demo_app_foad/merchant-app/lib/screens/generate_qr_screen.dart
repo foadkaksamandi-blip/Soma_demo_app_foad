@@ -1,9 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../services/qr_service.dart';
-import '../services/local_db.dart';
-import 'package:uuid/uuid.dart';
 
 class GenerateQrScreen extends StatefulWidget {
   const GenerateQrScreen({super.key});
@@ -13,136 +10,99 @@ class GenerateQrScreen extends StatefulWidget {
 }
 
 class _GenerateQrScreenState extends State<GenerateQrScreen> {
-  final TextEditingController amountCtrl = TextEditingController();
-  String? qrPayload;
-  final uuid = const Uuid();
+  final TextEditingController _amountCtrl = TextEditingController();
+  String? _qrData;
 
-  String _fmt(int rials) => NumberFormat.decimalPattern('fa').format(rials);
-
-  void _generate() {
-    final raw = amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (raw.isEmpty) {
-      _toast('مبلغ را وارد کنید');
-      return;
-    }
-    final amount = int.tryParse(raw) ?? 0;
+  void _makeQr() {
+    final amount = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
     if (amount <= 0) {
-      _toast('مبلغ معتبر نیست');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('مبلغ معتبر وارد کنید.')),
+      );
       return;
     }
-
-    final txId = 'SOMA-${DateTime.now().toIso8601String().split('T').first}-${uuid.v4().substring(0,6)}';
-    final payload = MerchantQrService().buildPayload(amount: amount, txId: txId);
-
-    setState(() {
-      qrPayload = payload;
+    final data = jsonEncode({
+      'type': 'soma_merchant_request',
+      'amount': amount,
+      'ts': DateTime.now().toIso8601String(),
     });
-
-    // ثبت تراکنش موقت در لاگ فروشنده (منتظر انجام توسط خریدار)
-    LocalDBMerchant.instance.addMerchantTx(
-      txId: txId,
-      amount: amount,
-      method: 'QR',
-      ts: DateTime.now().millisecondsSinceEpoch,
-      status: 'PENDING',
-    );
-
-    _toast('QR واقعی تولید شد و آماده اسکن خریدار است.');
-  }
-
-  void _toast(String msg, {bool ok = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    amountCtrl.dispose();
-    super.dispose();
+    setState(() => _qrData = data);
   }
 
   @override
   Widget build(BuildContext context) {
-    const successGreen = Color(0xFF27AE60);
-    const primaryTurquoise = Color(0xFF1ABC9C);
+    return const Directionality(
+      textDirection: TextDirection.rtl,
+      child: _GenerateQrBody(),
+    );
+  }
+}
+
+class _GenerateQrBody extends StatefulWidget {
+  const _GenerateQrBody();
+
+  @override
+  State<_GenerateQrBody> createState() => _GenerateQrBodyState();
+}
+
+class _GenerateQrBodyState extends State<_GenerateQrBody> {
+  final TextEditingController _amountCtrl = TextEditingController();
+  String? _qrData;
+
+  void _makeQr() {
+    final amount = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    if (amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('مبلغ معتبر وارد کنید.')));
+      return;
+    }
+    final payload = jsonEncode({
+      'type': 'soma_merchant_request',
+      'amount': amount,
+      'ts': DateTime.now().toIso8601String(),
+    });
+    setState(() => _qrData = payload);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color successGreen = Color(0xFF27AE60);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تولید QR فروش', textDirection: TextDirection.rtl),
+        title: const Text('تولید QR برای پرداخت'),
         backgroundColor: successGreen,
+        foregroundColor: Colors.white,
+        centerTitle: true,
       ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
         child: ListView(
-          padding: const EdgeInsets.all(16),
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: successGreen.withOpacity(0.25)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('مبلغ فروش'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'مثلاً ۵۰۰٬۰۰۰',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                ],
+            const Text('مبلغ فروش'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _amountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                hintText: 'مثلاً ۵۰۰۰۰۰',
+                border: OutlineInputBorder(),
+                isDense: true,
               ),
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: _generate,
-                icon: const Icon(Icons.qr_code),
-                label: const Text('تولید QR واقعی'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: successGreen,
-                  foregroundColor: Colors.white,
-                ),
-              ),
+            ElevatedButton.icon(
+              onPressed: _makeQr,
+              icon: const Icon(Icons.qr_code),
+              label: const Text('تولید QR'),
             ),
-            const SizedBox(height: 12),
-            if (qrPayload != null)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text('QR برای اسکن خریدار', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: QrImageView(
-                        data: qrPayload!,
-                        size: 240,
-                        backgroundColor: Colors.white,
-                        version: QrVersions.auto,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text('مبلغ: ${_fmt(jsonDecode(qrPayload!)["amount"])} ریال'),
-                    Text('کد تراکنش: ${jsonDecode(qrPayload!)["tx_id"]}'),
-                  ],
+            const SizedBox(height: 16),
+            if (_qrData != null)
+              Center(
+                child: QrImageView(
+                  data: _qrData!,
+                  version: QrVersions.auto,
+                  size: 260,
+                  backgroundColor: Colors.white,
                 ),
               ),
           ],
