@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../services/qr_service.dart';
+import '../services/local_db.dart';
+import 'package:uuid/uuid.dart';
 
 class GenerateQrScreen extends StatefulWidget {
   const GenerateQrScreen({super.key});
@@ -10,17 +13,12 @@ class GenerateQrScreen extends StatefulWidget {
 
 class _GenerateQrScreenState extends State<GenerateQrScreen> {
   final TextEditingController amountCtrl = TextEditingController();
-  String? qrPayload; // داده QR (نمایشی)
-
-  @override
-  void dispose() {
-    amountCtrl.dispose();
-    super.dispose();
-  }
+  String? qrPayload;
+  final uuid = const Uuid();
 
   String _fmt(int rials) => NumberFormat.decimalPattern('fa').format(rials);
 
-  void _makeQr() {
+  void _generate() {
     final raw = amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (raw.isEmpty) {
       _toast('مبلغ را وارد کنید');
@@ -31,102 +29,59 @@ class _GenerateQrScreenState extends State<GenerateQrScreen> {
       _toast('مبلغ معتبر نیست');
       return;
     }
-    final txId = _genTxId();
-    final json = '{"type":"soma_tx","amount":$amount,"tx_id":"$txId"}';
-    setState(() => qrPayload = json);
-    _toast('QR تولید شد (نمایشی)', ok: true);
-  }
-
-  String _genTxId() {
-    final now = DateTime.now();
-    final ts = now.millisecondsSinceEpoch.toString().substring(8);
-    return 'SOMA-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-$ts';
+    final txId = 'SOMA-${DateTime.now().toIso8601String().split('T').first}-${uuid.v4().substring(0,6)}';
+    final payload = MerchantQrService().buildPayload(amount: amount, txId: txId);
+    setState(() {
+      qrPayload = payload;
+    });
+    // ثبت تراکنش موقت در لاگ فروشنده (منتظر انجام توسط خریدار)
+    LocalDBMerchant.instance.addMerchantTx(
+      txId: txId,
+      amount: amount,
+      method: 'QR',
+      ts: DateTime.now().millisecondsSinceEpoch,
+      status: 'PENDING',
+    );
+    _toast('QR تولید شد (واقعی - داده JSON)');
   }
 
   void _toast(String msg, {bool ok = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87,
-      ),
+      SnackBar(content: Text(msg, textDirection: TextDirection.rtl), backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87),
     );
   }
 
   @override
+  void dispose() {
+    amountCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const primaryTurquoise = Color(0xFF1ABC9C);
     const successGreen = Color(0xFF27AE60);
+    const primaryTurquoise = Color(0xFF1ABC9C);
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: successGreen,
-        foregroundColor: Colors.white,
-        title: const Text('تولید QR فروش', textDirection: TextDirection.rtl),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('تولید QR فروش', textDirection: TextDirection.rtl), backgroundColor: successGreen),
       body: Directionality(
         textDirection: TextDirection.rtl,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // مبلغ فروش
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: _box(successGreen),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('مبلغ فروش'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'مثلاً ۵۰۰٬۰۰۰',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            // تولید QR
-            SizedBox(
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: _makeQr,
-                icon: const Icon(Icons.qr_code),
-                label: const Text('تولید QR'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: successGreen,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            // پیش‌نمایش داده QR (نمایشی)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: _box(primaryTurquoise),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('داده QR (نمایشی)'),
-                  const SizedBox(height: 8),
-                  Text(qrPayload ?? 'هنوز تولید نشده'),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: ListView(padding: const EdgeInsets.all(16), children: [
+          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: successGreen.withOpacity(0.25))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('مبلغ فروش'),
+            const SizedBox(height: 8),
+            TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'مثلاً ۵۰۰٬۰۰۰', border: OutlineInputBorder(), isDense: true)),
+          ])),
+          const SizedBox(height: 12),
+          SizedBox(height: 48, child: ElevatedButton.icon(onPressed: _generate, icon: const Icon(Icons.qr_code), label: const Text('تولید QR'), style: ElevatedButton.styleFrom(backgroundColor: successGreen, foregroundColor: Colors.white))),
+          const SizedBox(height: 12),
+          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: primaryTurquoise.withOpacity(0.25))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('داده QR (JSON)'),
+            const SizedBox(height: 8),
+            Text(qrPayload ?? 'هنوز تولید نشده'),
+          ])),
+        ]),
       ),
     );
   }
-
-  BoxDecoration _box(Color c) => BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.withOpacity(0.25)),
-      );
 }
