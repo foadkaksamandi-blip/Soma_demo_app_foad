@@ -1,109 +1,62 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:qr_flutter/qr_flutter.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import '../services/local_db.dart';
 
-class GenerateQrScreen extends StatefulWidget {
-  const GenerateQrScreen({super.key});
+class ScanReceiptScreen extends StatefulWidget {
+  const ScanReceiptScreen({super.key});
 
   @override
-  State<GenerateQrScreen> createState() => _GenerateQrScreenState();
+  State<ScanReceiptScreen> createState() => _ScanReceiptScreenState();
 }
 
-class _GenerateQrScreenState extends State<GenerateQrScreen> {
-  final TextEditingController _amountCtrl = TextEditingController();
-  String? _qrData;
+class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
+  bool _done = false;
+  String? _msg;
 
-  void _makeQr() {
-    final amount = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('مبلغ معتبر وارد کنید.')),
-      );
-      return;
+  void _onDetect(BarcodeCapture cap) {
+    if (_done) return;
+    final raw = cap.barcodes.isNotEmpty ? cap.barcodes.first.rawValue : null;
+    if (raw == null) return;
+    try {
+      final data = jsonDecode(raw);
+      if (data['type'] == 'soma_receipt') {
+        final amount = (data['amount'] as num).toInt();
+        LocalDBMerchant.instance.addMerchantBalance(amount);
+        setState(() {
+          _msg = 'رسید معتبر دریافت شد. مبلغ $amount ریال اضافه شد.';
+          _done = true;
+        });
+      } else {
+        setState(() => _msg = 'کد معتبر رسید نیست.');
+      }
+    } catch (_) {
+      setState(() => _msg = 'QR نامعتبر است.');
     }
-    final data = jsonEncode({
-      'type': 'soma_merchant_request',
-      'amount': amount,
-      'ts': DateTime.now().toIso8601String(),
-    });
-    setState(() => _qrData = data);
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Directionality(
+    const Color primaryTurquoise = Color(0xFF1ABC9C);
+
+    return Directionality(
       textDirection: TextDirection.rtl,
-      child: _GenerateQrBody(),
-    );
-  }
-}
-
-class _GenerateQrBody extends StatefulWidget {
-  const _GenerateQrBody();
-
-  @override
-  State<_GenerateQrBody> createState() => _GenerateQrBodyState();
-}
-
-class _GenerateQrBodyState extends State<_GenerateQrBody> {
-  final TextEditingController _amountCtrl = TextEditingController();
-  String? _qrData;
-
-  void _makeQr() {
-    final amount = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('مبلغ معتبر وارد کنید.')));
-      return;
-    }
-    final payload = jsonEncode({
-      'type': 'soma_merchant_request',
-      'amount': amount,
-      'ts': DateTime.now().toIso8601String(),
-    });
-    setState(() => _qrData = payload);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const Color successGreen = Color(0xFF27AE60);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('تولید QR برای پرداخت'),
-        backgroundColor: successGreen,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('اسکن رسید خریدار'),
+          backgroundColor: primaryTurquoise,
+          foregroundColor: Colors.white,
+          centerTitle: true,
+        ),
+        body: Column(
           children: [
-            const Text('مبلغ فروش'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                hintText: 'مثلاً ۵۰۰۰۰۰',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+            Expanded(
+              child: MobileScanner(onDetect: _onDetect),
             ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _makeQr,
-              icon: const Icon(Icons.qr_code),
-              label: const Text('تولید QR'),
-            ),
-            const SizedBox(height: 16),
-            if (_qrData != null)
-              Center(
-                child: QrImageView(
-                  data: _qrData!,
-                  version: QrVersions.auto,
-                  size: 260,
-                  backgroundColor: Colors.white,
-                ),
+            if (_msg != null)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(_msg!, textAlign: TextAlign.center),
               ),
           ],
         ),
