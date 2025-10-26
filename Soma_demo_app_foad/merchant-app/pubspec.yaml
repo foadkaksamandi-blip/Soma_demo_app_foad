@@ -12,10 +12,14 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
-  flutter_bluetooth_serial: ^0.4.0
+  # نسخه Git به‌جای pub.dev تا مشکل namespace حل شود
+  flutter_bluetooth_serial:
+    git:
+      url: https://github.com/edufolly/flutter_bluetooth_serial.git
+      ref: master
   mobile_scanner: ^3.0.0
   uuid: ^3.0.7
-  qr_flutter: ^4.1.0  # پکیج تولید QR واقعی
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
