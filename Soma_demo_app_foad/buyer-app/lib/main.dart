@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
 import 'screens/qr_pay_screen.dart';
-import 'screens/qr_receipt_screen.dart';
 import 'services/local_db.dart';
 
 void main() {
@@ -33,7 +31,8 @@ class BuyerApp extends StatelessWidget {
         brightness: Brightness.light,
       ),
       textTheme: const TextTheme(
-        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
+        titleLarge:
+            TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
         bodyMedium: TextStyle(fontSize: 16, color: textDark),
       ),
     );
@@ -53,7 +52,6 @@ class BuyerApp extends StatelessWidget {
         '/': (_) => const BuyerHomePage(),
         '/pay/bluetooth': (_) => const BluetoothPayScreen(),
         '/pay/qr': (_) => const QrPayScreen(),
-        '/pay/qr-receipt': (_) => const QrReceiptScreen(),
       },
       initialRoute: '/',
     );
@@ -83,8 +81,6 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     super.dispose();
   }
 
-  String _format(int rials) => NumberFormat.decimalPattern('fa').format(rials);
-
   void _refreshBalance() {
     setState(() {
       balance = LocalDB.instance.buyerBalance;
@@ -95,7 +91,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: success ? const Color(0xFF27AE60) : Colors.grey[800],
+        backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
       ),
     );
   }
@@ -133,16 +129,21 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   children: [
                     Icon(Icons.account_balance_wallet, color: successGreen),
                     const SizedBox(width: 8),
-                    Text('${_format(balance)} ریال',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: textDark,
-                        )),
+                    Text(
+                      '${LocalDB.formatRials(balance)} ریال',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: textDark,
+                      ),
+                    ),
                     const Spacer(),
                     ElevatedButton(
                       onPressed: _refreshBalance,
-                      style: ElevatedButton.styleFrom(backgroundColor: primaryTurquoise),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryTurquoise,
+                        foregroundColor: Colors.white,
+                      ),
                       child: const Text('بروزرسانی'),
                     )
                   ],
@@ -175,7 +176,6 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 ),
               ),
               const SizedBox(height: 16),
-              // نحوه پرداخت
               Text('نحوه پرداخت',
                   style: Theme.of(context)
                       .textTheme
@@ -186,33 +186,22 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 icon: Icons.bluetooth,
                 title: 'پرداخت با بلوتوث',
                 color: primaryTurquoise,
-                onTap: () => Navigator.pushNamed(context, '/pay/bluetooth'),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BluetoothPayScreen(
+                      enteredAmountRials:
+                          int.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0,
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 8),
               _PaymentCard(
                 icon: Icons.qr_code_2,
                 title: 'پرداخت با QR کد',
                 color: successGreen,
-                onTap: () => Navigator.pushNamed(
-                  context,
-                  '/pay/qr',
-                  arguments: int.tryParse(
-                        amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
-                      ) ??
-                      0,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: primaryTurquoise.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  'برای تست واقعی بلوتوث، اجازه‌ها را بدهید و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
-                  textAlign: TextAlign.center,
-                ),
+                onTap: () => Navigator.pushNamed(context, '/pay/qr'),
               ),
             ],
           ),
@@ -262,11 +251,15 @@ class _PaymentCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
+              CircleAvatar(
+                  backgroundColor: color,
+                  foregroundColor: Colors.white,
+                  child: Icon(icon)),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               const Icon(Icons.chevron_left),
             ],
