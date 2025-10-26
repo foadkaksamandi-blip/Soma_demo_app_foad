@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
-// صفحات پرداخت
 import 'screens/bluetooth_pay_screen.dart';
 import 'screens/qr_pay_screen.dart';
+import 'services/local_db.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const BuyerApp());
 }
 
@@ -15,8 +16,8 @@ class BuyerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C); // آبی فیروزه‌ای
-    const Color successGreen = Color(0xFF27AE60);     // سبز
+    const Color primaryTurquoise = Color(0xFF1ABC9C);
+    const Color successGreen = Color(0xFF27AE60);
     const Color textDark = Color(0xFF0B2545);
     const Color bgLight = Color(0xFFF7FAFC);
 
@@ -33,7 +34,6 @@ class BuyerApp extends StatelessWidget {
       textTheme: const TextTheme(
         titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
         bodyMedium: TextStyle(fontSize: 16, color: textDark),
-        labelLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
       ),
     );
 
@@ -66,8 +66,14 @@ class BuyerHomePage extends StatefulWidget {
 }
 
 class _BuyerHomePageState extends State<BuyerHomePage> {
-  int balance = 2000000; // موجودی اولیه نمایشی
+  int balance = LocalDB.instance.buyerBalance;
   final TextEditingController amountCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    balance = LocalDB.instance.buyerBalance;
+  }
 
   @override
   void dispose() {
@@ -75,9 +81,12 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     super.dispose();
   }
 
-  String _format(int rials) {
-    final f = NumberFormat.decimalPattern('fa');
-    return f.format(rials);
+  String _format(int rials) => NumberFormat.decimalPattern('fa').format(rials);
+
+  void _refreshBalance() {
+    setState(() {
+      balance = LocalDB.instance.buyerBalance;
+    });
   }
 
   void _showSnack(String msg, {bool success = false}) {
@@ -108,10 +117,8 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
           padding: const EdgeInsets.all(16),
           child: ListView(
             children: [
-              const SizedBox(height: 8),
               Text('اپ خریدار', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
-
               // موجودی
               Container(
                 padding: const EdgeInsets.all(16),
@@ -130,13 +137,17 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                           fontWeight: FontWeight.w700,
                           color: textDark,
                         )),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: _refreshBalance,
+                      style: ElevatedButton.styleFrom(backgroundColor: primaryTurquoise),
+                      child: const Text('بروزرسانی'),
+                    )
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // مبلغ خرید
+              // مبلغ
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -161,9 +172,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
               // نحوه پرداخت
               Text('نحوه پرداخت',
                   style: Theme.of(context)
@@ -184,9 +193,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 color: successGreen,
                 onTap: () => Navigator.pushNamed(context, '/pay/qr'),
               ),
-
               const SizedBox(height: 24),
-              // هشدار دمو
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -194,7 +201,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Text(
-                  'نسخه نمایشی — بدون اتصال بانکی • قابلیت‌های بلوتوث و QR در مراحل بعدی اضافه می‌شوند.',
+                  'برای تست واقعی بلوتوث، اجازه داده‌شده و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -206,8 +213,9 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
         backgroundColor: successGreen,
         foregroundColor: Colors.white,
         onPressed: () {
-          setState(() => balance += 100000);
-          _showSnack('۱۰۰٬۰۰۰ ریال به موجودی نمایشی اضافه شد.', success: true);
+          LocalDB.instance.addBuyerBalance(100000);
+          _showSnack('۱۰۰٬۰۰۰ ریال به موجودی آزمایشی اضافه شد.', success: true);
+          _refreshBalance();
         },
         label: const Text('افزایش موجودی آزمایشی'),
         icon: const Icon(Icons.add_card),
