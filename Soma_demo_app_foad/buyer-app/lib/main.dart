@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
+// صفحات پرداخت
+import 'screens/bluetooth_pay_screen.dart';
+import 'screens/qr_pay_screen.dart';
+
 void main() {
   runApp(const BuyerApp());
 }
@@ -11,8 +15,8 @@ class BuyerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
-    const Color successGreen = Color(0xFF27AE60);
+    const Color primaryTurquoise = Color(0xFF1ABC9C); // آبی فیروزه‌ای
+    const Color successGreen = Color(0xFF27AE60);     // سبز
     const Color textDark = Color(0xFF0B2545);
     const Color bgLight = Color(0xFFF7FAFC);
 
@@ -44,7 +48,12 @@ class BuyerApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-      home: const BuyerHomePage(),
+      routes: {
+        '/': (_) => const BuyerHomePage(),
+        '/pay/bluetooth': (_) => const BluetoothPayScreen(),
+        '/pay/qr': (_) => const QrPayScreen(),
+      },
+      initialRoute: '/',
     );
   }
 }
@@ -57,7 +66,7 @@ class BuyerHomePage extends StatefulWidget {
 }
 
 class _BuyerHomePageState extends State<BuyerHomePage> {
-  int balance = 2000000;
+  int balance = 2000000; // موجودی اولیه نمایشی
   final TextEditingController amountCtrl = TextEditingController();
 
   @override
@@ -99,8 +108,11 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
           padding: const EdgeInsets.all(16),
           child: ListView(
             children: [
+              const SizedBox(height: 8),
               Text('اپ خریدار', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
+
+              // موجودی
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -108,27 +120,23 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text('موجودی فعلی', style: TextStyle(color: textDark.withOpacity(0.8))),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.account_balance_wallet, color: successGreen),
-                        const SizedBox(width: 8),
-                        Text('${_format(balance)} ریال',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: textDark,
-                            )),
-                      ],
-                    ),
+                    Icon(Icons.account_balance_wallet, color: successGreen),
+                    const SizedBox(width: 8),
+                    Text('${_format(balance)} ریال',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: textDark,
+                        )),
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
+
+              // مبلغ خرید
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -153,7 +161,10 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
+
+              // نحوه پرداخت
               Text('نحوه پرداخت',
                   style: Theme.of(context)
                       .textTheme
@@ -164,16 +175,18 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 icon: Icons.bluetooth,
                 title: 'پرداخت با بلوتوث',
                 color: primaryTurquoise,
-                onTap: () => _showSnack('صفحه پرداخت با بلوتوث در Batch بعدی فعال می‌شود.'),
+                onTap: () => Navigator.pushNamed(context, '/pay/bluetooth'),
               ),
               const SizedBox(height: 8),
               _PaymentCard(
                 icon: Icons.qr_code_2,
                 title: 'پرداخت با QR کد',
                 color: successGreen,
-                onTap: () => _showSnack('صفحه پرداخت با QR در Batch بعدی فعال می‌شود.'),
+                onTap: () => Navigator.pushNamed(context, '/pay/qr'),
               ),
+
               const SizedBox(height: 24),
+              // هشدار دمو
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
