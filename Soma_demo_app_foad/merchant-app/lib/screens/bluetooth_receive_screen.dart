@@ -1,9 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
-import '../services/bluetooth_service.dart';
+
 import '../services/local_db.dart';
-import 'package:intl/intl.dart';
 
 class BluetoothReceiveScreen extends StatefulWidget {
   const BluetoothReceiveScreen({super.key});
@@ -13,124 +13,137 @@ class BluetoothReceiveScreen extends StatefulWidget {
 }
 
 class _BluetoothReceiveScreenState extends State<BluetoothReceiveScreen> {
-  bool isDiscoverable = false;
-  String? lastPayload;
-  BluetoothConnection? connection;
+  BluetoothConnection? _serverConn;
+  bool _listening = false;
+  String? _status;
+  String? _lastMsg;
 
-  @override
-  void initState() {
-    super.initState();
-    _startServer();
-  }
-
-  Future<void> _startServer() async {
-    final ok = await MerchantBluetoothService.instance.becomeDiscoverable();
-    if (!ok) {
-      _toast('بلوتوث فعال یا قابل‌دسترسی نیست');
-      return;
-    }
-    setState(() => isDiscoverable = true);
-
-    FlutterBluetoothSerial.instance.onStateChanged().listen((state) {
-      if (state == BluetoothState.STATE_OFF) {
-        _toast('بلوتوث خاموش شد');
-        setState(() => isDiscoverable = false);
-      }
-    });
-
-    FlutterBluetoothSerial.instance
-        .acceptIncomingConnection('SOMA-Merchant')
-        .then((conn) async {
-      await MerchantBluetoothService.instance.setConnection(conn);
-      connection = conn;
-      _listenIncoming();
-    }).catchError((e) {
-      _toast('اتصال ورودی شکست خورد: $e');
-    });
-  }
-
-  void _listenIncoming() {
-    MerchantBluetoothService.instance.inboundLines?.listen((line) {
-      setState(() => lastPayload = line);
-      try {
-        final json = jsonDecode(line);
-        if (json is Map && json['amount'] != null && json['tx_id'] != null) {
-          final int amount = json['amount'];
-          final String txId = json['tx_id'];
-          LocalDBMerchant.instance.addMerchantBalance(amount);
-          LocalDBMerchant.instance.addMerchantTx(
-            txId: txId,
-            amount: amount,
-            method: 'BT',
-            ts: DateTime.now().millisecondsSinceEpoch,
-            status: 'SUCCESS',
-          );
-          _toast('تراکنش دریافت شد: +${_fmt(amount)} ریال', ok: true);
-        }
-      } catch (_) {
-        _toast('داده‌ی نامعتبر دریافت شد');
-      }
-    });
-  }
-
-  String _fmt(int rials) => NumberFormat.decimalPattern('fa').format(rials);
-
-  void _toast(String msg, {bool ok = false}) {
+  void _show(String msg, {bool ok = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87),
     );
   }
 
-  @override
-  void dispose() {
-    connection?.dispose();
-    super.dispose();
+  Future<void> _startServer() async {
+    final enabled = await FlutterBluetoothSerial.instance.isEnabled;
+    if (!(enabled ?? false)) {
+      await FlutterBluetoothSerial.instance.requestEnable();
+    }
+    setState(() {
+      _listening = true;
+      _status = 'در انتظار دریافت از خریدار…';
+    });
+
+    // توجه: flutter_bluetooth_serial سرور واقعی RFCOMM ندارد؛
+    // در عمل باید دستگاه خریدار به فروشنده متصل شود و ما فقط
+    // داده را از input بخوانیم. پس کافی است در لاجیک فروشنده
+    // منتظر ورودی بمانیم؛ همین‌جا رفتار را شبیه‌سازی می‌کنیم.
+    FlutterBluetoothSerial.instance.onRead?.listen((Uint8List data) {});
+  }
+
+  Future<void> _acceptFromAddress(String address) async {
+    try {
+      final conn = await BluetoothConnection.toAddress(address);
+      setState(() {
+        _serverConn = conn;
+        _status = 'اتصال از خریدار برقرار شد.';
+      });
+
+      final buffer = StringBuffer();
+      await for (final chunk in conn.input!.map(utf8.decode)) {
+        buffer.write(chunk);
+        if (buffer.toString().contains('\n')) break;
+      }
+      final raw = buffer.toString().trim();
+      setState(() => _lastMsg = raw);
+
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final int amount = data['amount'] as int? ?? 0;
+
+      if (amount > 0) {
+        LocalDBMerchant.instance.addMerchantBalance(amount);
+        conn.output.add(Uint8List.fromList(utf8.encode('OK\n')));
+        await conn.output.allSent;
+        _show('دریافت مبلغ $amount ریال از خریدار.', ok: true);
+      } else {
+        conn.output.add(Uint8List.fromList(utf8.encode('ERR\n')));
+        await conn.output.allSent;
+      }
+
+      await conn.close();
+      setState(() {
+        _serverConn = null;
+        _status = 'پایان ارتباط.';
+      });
+    } catch (e) {
+      _show('خطا در دریافت: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const successGreen = Color(0xFF27AE60);
-    const primaryTurquoise = Color(0xFF1ABC9C);
+    const Color primaryTurquoise = Color(0xFF1ABC9C);
+
+    return const Directionality(
+      textDirection: TextDirection.rtl,
+      child: _BluetoothReceiveBody(),
+    );
+  }
+}
+
+class _BluetoothReceiveBody extends StatefulWidget {
+  const _BluetoothReceiveBody();
+
+  @override
+  State<_BluetoothReceiveBody> createState() => _BluetoothReceiveBodyState();
+}
+
+class _BluetoothReceiveBodyState extends State<_BluetoothReceiveBody> {
+  bool _listening = false;
+  String? _status;
+
+  void _show(String msg, {bool ok = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87),
+    );
+  }
+
+  Future<void> _start() async {
+    final enabled = await FlutterBluetoothSerial.instance.isEnabled;
+    if (!(enabled ?? false)) {
+      await FlutterBluetoothSerial.instance.requestEnable();
+    }
+    setState(() {
+      _listening = true;
+      _status = 'برای دریافت، خریدار باید اتصال را برقرار کند…';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primaryTurquoise = Color(0xFF1ABC9C);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('دریافت با بلوتوث', textDirection: TextDirection.rtl),
-        backgroundColor: successGreen,
+        title: const Text('دریافت با بلوتوث'),
+        backgroundColor: primaryTurquoise,
+        foregroundColor: Colors.white,
+        centerTitle: true,
       ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isDiscoverable
-                        ? 'دستگاه قابل شناسایی است و منتظر اتصال خریدار...'
-                        : 'در انتظار فعال‌سازی بلوتوث',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 12),
-                  if (lastPayload != null) ...[
-                    const Divider(),
-                    const Text('آخرین داده دریافت‌شده:'),
-                    const SizedBox(height: 8),
-                    Text(lastPayload!, style: const TextStyle(fontSize: 13)),
-                  ],
-                ],
-              ),
+            ElevatedButton.icon(
+              onPressed: _listening ? null : _start,
+              icon: const Icon(Icons.bluetooth_connected),
+              label: const Text('آماده دریافت'),
             ),
+            const SizedBox(height: 12),
+            if (_status != null) Text(_status!),
+            const SizedBox(height: 12),
+            const Text('نکته: ابتدا دستگاه‌ها را Pair کنید. در این دمو، خریدار اتصال را آغاز می‌کند و مبلغ را ارسال می‌نماید.'),
           ],
         ),
       ),
