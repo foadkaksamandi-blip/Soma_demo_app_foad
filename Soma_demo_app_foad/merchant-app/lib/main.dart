@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
+// صفحه تولید QR
+import 'screens/generate_qr_screen.dart';
+
 void main() {
   runApp(const MerchantApp());
 }
@@ -44,7 +47,11 @@ class MerchantApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
-      home: const MerchantHomePage(),
+      routes: {
+        '/': (_) => const MerchantHomePage(),
+        '/qr/generate': (_) => const GenerateQrScreen(),
+      },
+      initialRoute: '/',
     );
   }
 }
@@ -57,7 +64,7 @@ class MerchantHomePage extends StatefulWidget {
 }
 
 class _MerchantHomePageState extends State<MerchantHomePage> {
-  int balance = 0;
+  int balance = 0; // موجودی نمایشی
   final TextEditingController amountCtrl = TextEditingController();
 
   @override
@@ -66,10 +73,7 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
     super.dispose();
   }
 
-  String _format(int rials) {
-    final f = NumberFormat.decimalPattern('fa');
-    return f.format(rials);
-  }
+  String _format(int rials) => NumberFormat.decimalPattern('fa').format(rials);
 
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -101,6 +105,8 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
             children: [
               Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
+
+              // موجودی
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -121,7 +127,10 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
+
+              // مبلغ فروش
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -146,6 +155,7 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
               Text('دریافت از طریق',
                   style: Theme.of(context)
@@ -153,19 +163,22 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                       .titleLarge!
                       .copyWith(color: successGreen)),
               const SizedBox(height: 8),
+
               _ActionCard(
                 icon: Icons.bluetooth_searching,
                 title: 'دریافت با بلوتوث',
                 color: primaryTurquoise,
-                onTap: () => _showSnack('صفحه دریافت بلوتوث در Batch بعدی فعال می‌شود.'),
+                onTap: () => _showSnack('اتصال بلوتوث در Batch بعدی فعال می‌شود.'),
               ),
               const SizedBox(height: 8),
+
               _ActionCard(
                 icon: Icons.qr_code_2,
                 title: 'دریافت با QR کد (تولید QR)',
                 color: successGreen,
-                onTap: () => _showSnack('صفحه تولید QR در Batch بعدی فعال می‌شود.'),
+                onTap: () => Navigator.pushNamed(context, '/qr/generate'),
               ),
+
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(12),
