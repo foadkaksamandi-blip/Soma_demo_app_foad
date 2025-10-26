@@ -1,14 +1,30 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
+def flutterVersionCode = 1
+def flutterVersionName = "1.0.0"
+
+android {
+    namespace "com.soma.merchant"
+    compileSdkVersion 33
+
+    defaultConfig {
+        applicationId "com.soma.merchant"
+        minSdkVersion 24
+        targetSdkVersion 33
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
     }
-    dependencies { }
+
+    buildTypes {
+        release {
+            // replace with a real signingConfig when you have keystore
+            signingConfig signingConfigs.debug
+        }
+    }
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
+flutter {
+    source '../..'
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10"
 }
