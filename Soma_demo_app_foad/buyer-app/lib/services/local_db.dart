@@ -1,5 +1,4 @@
-/// LocalDB ساده و درون‌حافظه‌ای (بدون وابستگی) برای دمو اولیه.
-/// در Batch‌های بعدی می‌تواند با Hive/SharedPreferences جایگزین/تکمیل شود.
+/// LocalDB ساده و درون‌حافظه‌ای برای دمو واقعی (Buyer)
 class LocalDB {
   LocalDB._();
   static final LocalDB instance = LocalDB._();
@@ -18,7 +17,7 @@ class LocalDB {
     required int amount,
     required String method, // 'BT' | 'QR'
     required int ts,
-    required String status, // 'SUCCESS' | 'FAIL'
+    required String status, // 'SUCCESS' | 'FAIL' | 'PENDING'
   }) {
     _buyerHistory.add({
       'tx_id': txId,
