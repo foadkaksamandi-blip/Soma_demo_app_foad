@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
 import 'screens/qr_pay_screen.dart';
@@ -50,8 +51,9 @@ class BuyerApp extends StatelessWidget {
       ],
       routes: {
         '/': (_) => const BuyerHomePage(),
-        '/pay/bluetooth': (_) => const BluetoothPayScreen(),
-        '/pay/qr': (_) => const QrPayScreen(),
+        // حذف const تا خطای "Not a constant expression" رفع شود
+        '/pay/bluetooth': (_) => BluetoothPayScreen(),
+        '/pay/qr': (_) => QrPayScreen(),
       },
       initialRoute: '/',
     );
@@ -81,6 +83,8 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     super.dispose();
   }
 
+  String _format(int rials) => NumberFormat.decimalPattern('fa').format(rials);
+
   void _refreshBalance() {
     setState(() {
       balance = LocalDB.instance.buyerBalance;
@@ -90,8 +94,8 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
-        backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
+        content: Text(msg, textDirection: TextDirection.rtl),
+        backgroundColor: success ? const Color(0xFF27AE60) : Colors.grey[800],
       ),
     );
   }
@@ -102,16 +106,16 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     const Color successGreen = Color(0xFF27AE60);
     const Color textDark = Color(0xFF0B2545);
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: primaryTurquoise,
-          foregroundColor: Colors.white,
-          title: const Text('اپ آفلاین سوما'),
-          centerTitle: true,
-        ),
-        body: Padding(
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: primaryTurquoise,
+        foregroundColor: Colors.white,
+        title: const Text('اپ آفلاین سوما', textDirection: TextDirection.rtl),
+        centerTitle: true,
+      ),
+      body: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Padding(
           padding: const EdgeInsets.all(16),
           child: ListView(
             children: [
@@ -123,27 +127,24 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
+                  border:
+                      Border.all(color: primaryTurquoise.withOpacity(0.25)),
                 ),
                 child: Row(
                   children: [
                     Icon(Icons.account_balance_wallet, color: successGreen),
                     const SizedBox(width: 8),
-                    Text(
-                      '${LocalDB.formatRials(balance)} ریال',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: textDark,
-                      ),
-                    ),
+                    Text('${_format(balance)} ریال',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: textDark,
+                        )),
                     const Spacer(),
                     ElevatedButton(
                       onPressed: _refreshBalance,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryTurquoise,
-                        foregroundColor: Colors.white,
-                      ),
+                          backgroundColor: primaryTurquoise),
                       child: const Text('بروزرسانی'),
                     )
                   ],
@@ -156,7 +157,8 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
+                  border:
+                      Border.all(color: primaryTurquoise.withOpacity(0.25)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,6 +178,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 ),
               ),
               const SizedBox(height: 16),
+              // نحوه پرداخت
               Text('نحوه پرداخت',
                   style: Theme.of(context)
                       .textTheme
@@ -186,15 +189,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 icon: Icons.bluetooth,
                 title: 'پرداخت با بلوتوث',
                 color: primaryTurquoise,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => BluetoothPayScreen(
-                      enteredAmountRials:
-                          int.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0,
-                    ),
-                  ),
-                ),
+                onTap: () => Navigator.pushNamed(context, '/pay/bluetooth'),
               ),
               const SizedBox(height: 8),
               _PaymentCard(
@@ -203,20 +198,32 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 color: successGreen,
                 onTap: () => Navigator.pushNamed(context, '/pay/qr'),
               ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primaryTurquoise.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'برای تست واقعی بلوتوث، اجازه داده‌شده و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
             ],
           ),
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: successGreen,
-          foregroundColor: Colors.white,
-          onPressed: () {
-            LocalDB.instance.addBuyerBalance(100000);
-            _showSnack('۱۰۰٬۰۰۰ ریال به موجودی آزمایشی اضافه شد.', success: true);
-            _refreshBalance();
-          },
-          label: const Text('افزایش موجودی آزمایشی'),
-          icon: const Icon(Icons.add_card),
-        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: successGreen,
+        foregroundColor: Colors.white,
+        onPressed: () {
+          LocalDB.instance.addBuyerBalance(100000);
+          _showSnack('۱۰۰٬۰۰۰ ریال به موجودی آزمایشی اضافه شد.', success: true);
+          _refreshBalance();
+        },
+        label: const Text('افزایش موجودی آزمایشی'),
+        icon: const Icon(Icons.add_card),
       ),
     );
   }
