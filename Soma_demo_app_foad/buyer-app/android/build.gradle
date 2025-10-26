@@ -1,37 +1,29 @@
-plugins {
-    id "com.android.application"
-    id "kotlin-android"
-    id "dev.flutter.flutter-gradle-plugin"
-}
+def flutterVersionCode = 1
+def flutterVersionName = "1.0.0"
 
 android {
-    // به‌جای package در مانیفست
     namespace "com.soma.buyer"
-
     compileSdkVersion 33
 
     defaultConfig {
         applicationId "com.soma.buyer"
-        minSdkVersion flutter.minSdkVersion
+        minSdkVersion 24
         targetSdkVersion 33
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
-        multiDexEnabled true
     }
 
     buildTypes {
         release {
-            // اگر keystore نداری فعلاً با دیباگ sign کن
             signingConfig signingConfigs.debug
-            minifyEnabled false
-            shrinkResources false
-        }
-        debug {
-            debuggable true
         }
     }
 }
 
+flutter {
+    source '../..'
+}
+
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10"
 }
