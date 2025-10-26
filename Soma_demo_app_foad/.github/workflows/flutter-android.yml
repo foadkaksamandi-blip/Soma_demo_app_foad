@@ -1,0 +1,56 @@
+name: Flutter Web Sanity (Buyer & Merchant)
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+
+      # Buyer app
+      - name: Buyer - Flutter pub get
+        working-directory: Soma_demo_app_foad/buyer-app
+        run: flutter pub get
+
+      - name: Buyer - Analyze
+        working-directory: Soma_demo_app_foad/buyer-app
+        run: flutter analyze
+
+      - name: Buyer - Build web
+        working-directory: Soma_demo_app_foad/buyer-app
+        run: flutter build web
+
+      # Merchant app
+      - name: Merchant - Flutter pub get
+        working-directory: Soma_demo_app_foad/merchant-app
+        run: flutter pub get
+
+      - name: Merchant - Analyze
+        working-directory: Soma_demo_app_foad/merchant-app
+        run: flutter analyze
+
+      - name: Merchant - Build web
+        working-directory: Soma_demo_app_foad/merchant-app
+        run: flutter build web
+
+      - name: Upload Buyer Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: buyer-web-build
+          path: Soma_demo_app_foad/buyer-app/build/web
+
+      - name: Upload Merchant Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: merchant-web-build
+          path: Soma_demo_app_foad/merchant-app/build/web
