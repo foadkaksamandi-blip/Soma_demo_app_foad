@@ -6,28 +6,38 @@ class QrPayScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ورودی اختیاری مبلغ از صفحه قبل
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {};
-    final payload = args['payload'] as String? ?? '';
+    final amount = (args['amount'] ?? '').toString().trim();
+    final payload = amount.isNotEmpty
+        ? 'soma://pay?amount=$amount&ts=${DateTime.now().millisecondsSinceEpoch}'
+        : 'soma://pay?demo=1&ts=${DateTime.now().millisecondsSinceEpoch}';
+
     const successGreen = Color(0xFF27AE60);
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('رسید پرداخت (اسکن توسط فروشنده)'),
           backgroundColor: successGreen,
           foregroundColor: Colors.white,
+          title: const Text('پرداخت با QR'),
           centerTitle: true,
         ),
         body: Center(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              QrImageView(data: payload.isEmpty ? 'PAYLOAD' : payload, size: 260),
+              QrImageView(data: payload, size: 260),
               const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text('را اسکن کنید تا دریافت‌کننده روی اپ فروشنده تایید شود.'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  amount.isNotEmpty
+                      ? 'این QR برای مبلغ $amount ریال تولید شد.'
+                      : 'دموی پرداخت QR (بدون مبلغ مشخص).',
+                  textAlign: TextAlign.center,
+                ),
               ),
             ],
           ),
