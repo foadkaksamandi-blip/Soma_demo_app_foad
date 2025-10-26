@@ -1,15 +1,43 @@
-// Project-level build.gradle (minimal). Plugin versions are defined in settings.gradle.
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies { }
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
+android {
+    // 👇 بجای package در Manifest
+    namespace "com.soma.buyer"
+
+    compileSdkVersion 33
+
+    defaultConfig {
+        // 👇 شناسه اپ
+        applicationId "com.soma.buyer"
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion 33
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        multiDexEnabled true
     }
+
+    buildTypes {
+        release {
+            // اگر keystore نداری، موقتاً از دیباگ استفاده کن
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
+        }
+        debug {
+            debuggable true
+        }
+    }
+
+    // (اختیاری) برای فونت‌های متریال
+    buildFeatures {
+        buildConfig true
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
 }
