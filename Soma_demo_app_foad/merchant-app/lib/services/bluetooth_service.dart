@@ -1,16 +1,18 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
-/// BuyerBluetoothService
-/// - اسکن دستگاه‌های جفت‌شده
-/// - اتصال به آدرس MAC
-/// - ارسال پیام JSON خط‌دار (\n)
-class BuyerBluetoothService {
-  BuyerBluetoothService._();
-  static final BuyerBluetoothService instance = BuyerBluetoothService._();
+/// MerchantBluetoothService
+/// - قابل discoverable شدن
+/// - مدیریت اتصال ورودی (RFCOMM)
+/// - ارائه stream از خطوط ورودی JSON
+class MerchantBluetoothService {
+  MerchantBluetoothService._();
+  static final MerchantBluetoothService instance = MerchantBluetoothService._();
 
   final FlutterBluetoothSerial _bt = FlutterBluetoothSerial.instance;
   BluetoothConnection? _connection;
+  StreamController<String>? _linesCtrl;
 
   Future<bool> ensureEnabled() async {
     final state = await _bt.state;
@@ -21,48 +23,45 @@ class BuyerBluetoothService {
     return true;
   }
 
-  Future<List<BluetoothDevice>> scanDevices({Duration timeout = const Duration(seconds: 4)}) async {
+  Future<bool> becomeDiscoverable({int seconds = 120}) async {
     final ok = await ensureEnabled();
-    if (!ok) return [];
-    try {
-      final bonded = await _bt.getBondedDevices();
-      return bonded;
-    } catch (_) {
-      return [];
-    }
+    if (!ok) return false;
+    final allowed = await _bt.requestDiscoverable(seconds);
+    return (allowed ?? 0) > 0;
   }
 
-  Future<bool> connect(String address) async {
+  /// در این پیاده‌سازی ساده: اتصال از سمت خریدار برقرار می‌شود و این تابع connection را می‌پذیرد
+  Future<void> setConnection(BluetoothConnection connection) async {
     await disconnect();
-    try {
-      _connection = await BluetoothConnection.toAddress(address);
-      // optionally listen to input here
-      return _connection?.isConnected ?? false;
-    } catch (_) {
-      _connection = null;
-      return false;
-    }
+    _connection = connection;
+    _linesCtrl = StreamController<String>();
+    _connection!.input!.listen((data) {
+      try {
+        final text = utf8.decode(data);
+        // ممکن است چند خطی برسد؛ جداکن با \n
+        final parts = text.split('\n');
+        for (final p in parts) {
+          if (p.trim().isNotEmpty) {
+            _linesCtrl?.add(p.trim());
+          }
+        }
+      } catch (_) {}
+    }, onDone: () {
+      _linesCtrl?.close();
+    });
   }
 
-  bool get isConnected => _connection?.isConnected ?? false;
+  Stream<String>? get inboundLines => _linesCtrl?.stream;
 
   Future<void> disconnect() async {
     try {
       await _connection?.close();
       _connection?.dispose();
     } catch (_) {}
-    _connection = null;
-  }
-
-  Future<bool> sendJson(String jsonPayload) async {
-    if (_connection == null || !(_connection?.isConnected ?? false)) return false;
     try {
-      final data = utf8.encode('$jsonPayload\n');
-      _connection!.output.add(data);
-      await _connection!.output.allSent;
-      return true;
-    } catch (_) {
-      return false;
-    }
+      await _linesCtrl?.close();
+    } catch (_) {}
+    _connection = null;
+    _linesCtrl = null;
   }
 }
