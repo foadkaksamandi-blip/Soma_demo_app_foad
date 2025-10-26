@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:intl/intl.dart';
 
 import 'screens/generate_qr_screen.dart';
 import 'screens/bluetooth_receive_screen.dart';
+import 'screens/scan_receipt_screen.dart';
 import 'services/local_db.dart';
 
 void main() {
@@ -52,6 +52,7 @@ class MerchantApp extends StatelessWidget {
         '/': (_) => const MerchantHomePage(),
         '/qr/generate': (_) => const GenerateQrScreen(),
         '/bt/receive': (_) => const BluetoothReceiveScreen(),
+        '/qr/scan-receipt': (_) => const ScanReceiptScreen(),
       },
       initialRoute: '/',
     );
@@ -67,35 +68,9 @@ class MerchantHomePage extends StatefulWidget {
 
 class _MerchantHomePageState extends State<MerchantHomePage> {
   int balance = LocalDBMerchant.instance.merchantBalance;
-  final TextEditingController amountCtrl = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    balance = LocalDBMerchant.instance.merchantBalance;
-  }
-
-  @override
-  void dispose() {
-    amountCtrl.dispose();
-    super.dispose();
-  }
-
-  String _format(int rials) => NumberFormat.decimalPattern('fa').format(rials);
-
-  void _refreshBalance() {
-    setState(() {
-      balance = LocalDBMerchant.instance.merchantBalance;
-    });
-  }
-
-  void _showSnack(String msg, {bool success = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg), // جهت از Directionality والد می‌آید
-        backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
-      ),
-    );
+  void _refresh() {
+    setState(() => balance = LocalDBMerchant.instance.merchantBalance);
   }
 
   @override
@@ -104,95 +79,77 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
     const Color successGreen = Color(0xFF27AE60);
     const Color textDark = Color(0xFF0B2545);
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: successGreen,
-        foregroundColor: Colors.white,
-        title: const Text('اپ آفلاین سوما'),
-        centerTitle: true,
-      ),
-      body: const Directionality(
-        textDirection: TextDirection.rtl,
-        child: _MerchantBody(),
-      ),
-    );
-  }
-}
-
-class _MerchantBody extends StatelessWidget {
-  const _MerchantBody();
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
-    const Color successGreen = Color(0xFF27AE60);
-    const Color textDark = Color(0xFF0B2545);
-
-    final state = context.findAncestorStateOfType<_MerchantHomePageState>()!;
-    final _format = state._format;
-    final _refreshBalance = state._refreshBalance;
-    final amountCtrl = state.amountCtrl;
-    final balance = state.balance;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: ListView(
-        children: [
-          Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
-
-          // کارت موجودی
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: successGreen.withOpacity(0.25)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.account_balance_wallet, color: successGreen),
-                const SizedBox(width: 8),
-                Text(
-                  'موجودی: ${_format(balance)} ریال',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: textDark,
-                  ),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: successGreen,
+          foregroundColor: Colors.white,
+          title: const Text('اپ آفلاین سوما'),
+          centerTitle: true,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            children: [
+              Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: successGreen.withOpacity(0.25)),
                 ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: _refreshBalance,
-                  style: ElevatedButton.styleFrom(backgroundColor: successGreen),
-                  child: const Text('بروزرسانی'),
-                )
-              ],
-            ),
+                child: Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet, color: successGreen),
+                    const SizedBox(width: 8),
+                    Text('موجودی: $balance ریال',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: textDark,
+                        )),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: _refresh,
+                      style: ElevatedButton.styleFrom(backgroundColor: successGreen),
+                      child: const Text('بروزرسانی'),
+                    )
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('دریافت از طریق',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge!
+                      .copyWith(color: successGreen)),
+              const SizedBox(height: 8),
+              _ActionCard(
+                icon: Icons.bluetooth_searching,
+                title: 'دریافت با بلوتوث',
+                color: primaryTurquoise,
+                onTap: () => Navigator.pushNamed(context, '/bt/receive'),
+              ),
+              const SizedBox(height: 8),
+              _ActionCard(
+                icon: Icons.qr_code_2,
+                title: 'تولید QR برای اسکن خریدار',
+                color: successGreen,
+                onTap: () => Navigator.pushNamed(context, '/qr/generate'),
+              ),
+              const SizedBox(height: 8),
+              _ActionCard(
+                icon: Icons.qr_code_scanner,
+                title: 'اسکن رسید خریدار',
+                color: successGreen,
+                onTap: () => Navigator.pushNamed(context, '/qr/scan-receipt'),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-
-          Text(
-            'دریافت از طریق',
-            style: Theme.of(context).textTheme.titleLarge!.copyWith(color: successGreen),
-          ),
-          const SizedBox(height: 8),
-
-          _ActionCard(
-            icon: Icons.bluetooth_searching,
-            title: 'دریافت با بلوتوث',
-            color: primaryTurquoise,
-            onTap: () => Navigator.pushNamed(context, '/bt/receive'),
-          ),
-          const SizedBox(height: 8),
-
-          _ActionCard(
-            icon: Icons.qr_code_2,
-            title: 'تولید QR برای اسکن خریدار',
-            color: successGreen,
-            onTap: () => Navigator.pushNamed(context, '/qr/generate'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -230,7 +187,8 @@ class _ActionCard extends StatelessWidget {
               CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                child: Text(title,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               const Icon(Icons.chevron_left),
             ],
