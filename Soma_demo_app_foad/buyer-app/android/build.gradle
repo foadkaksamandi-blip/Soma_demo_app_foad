@@ -1,29 +1,24 @@
-def flutterVersionCode = 1
-def flutterVersionName = "1.0.0"
-
-android {
-    namespace "com.soma.buyer"
-    compileSdkVersion 33
-
-    defaultConfig {
-        applicationId "com.soma.buyer"
-        minSdkVersion 24
-        targetSdkVersion 33
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+// Top-level build file for the buyer app (do NOT put `android {}` here)
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
     }
-
-    buildTypes {
-        release {
-            signingConfig signingConfigs.debug
-        }
+    dependencies {
+        classpath "com.android.tools.build:gradle:8.1.1"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.10"
+        classpath "dev.flutter:flutter-gradle-plugin"
     }
 }
 
-flutter {
-    source '../..'
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
 }
 
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10"
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
