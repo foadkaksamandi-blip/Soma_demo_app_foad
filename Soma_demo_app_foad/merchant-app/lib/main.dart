@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
 import 'screens/generate_qr_screen.dart';
+import 'screens/bluetooth_receive_screen.dart';
 import 'services/local_db.dart';
 
 void main() {
@@ -50,6 +51,7 @@ class MerchantApp extends StatelessWidget {
       routes: {
         '/': (_) => const MerchantHomePage(),
         '/qr/generate': (_) => const GenerateQrScreen(),
+        '/bt/receive': (_) => const BluetoothReceiveScreen(),
       },
       initialRoute: '/',
     );
@@ -144,31 +146,6 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                 ),
               ),
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: successGreen.withOpacity(0.25)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('مبلغ فروش'),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: amountCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        hintText: 'مثلاً ۵۰۰٬۰۰۰ ریال',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
               Text('دریافت از طریق',
                   style: Theme.of(context)
                       .textTheme
@@ -179,7 +156,7 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                 icon: Icons.bluetooth_searching,
                 title: 'دریافت با بلوتوث',
                 color: primaryTurquoise,
-                onTap: () => _showSnack('برای دریافت بلوتوث، صفحه اتصال در Batch بعدی فعال می‌شود.'),
+                onTap: () => Navigator.pushNamed(context, '/bt/receive'),
               ),
               const SizedBox(height: 8),
               _ActionCard(
@@ -188,32 +165,9 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
                 color: successGreen,
                 onTap: () => Navigator.pushNamed(context, '/qr/generate'),
               ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: successGreen.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  'برای تست واقعی QR و بلوتوث، دستگاه‌ها را آماده و جفت کنید؛ پس از تولید، QR واقعی نمایش داده می‌شود.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
             ],
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: primaryTurquoise,
-        foregroundColor: Colors.white,
-        onPressed: () {
-          LocalDBMerchant.instance.addMerchantBalance(150000);
-          _showSnack('۱۵۰٬۰۰۰ ریال به موجودی آزمایشی فروشنده اضافه شد.', success: true);
-          _refreshBalance();
-        },
-        label: const Text('افزایش موجودی آزمایشی'),
-        icon: const Icon(Icons.add),
       ),
     );
   }
