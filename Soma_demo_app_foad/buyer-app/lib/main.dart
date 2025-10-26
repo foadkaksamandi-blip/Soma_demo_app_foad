@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
-import 'screens/qr_pay_screen.dart';
+import 'screens/qr_pay_screen.dart'; // خیلی مهم: ایمپورت مستقیم صفحه QR
 import 'services/local_db.dart';
 
 void main() {
@@ -32,8 +32,7 @@ class BuyerApp extends StatelessWidget {
         brightness: Brightness.light,
       ),
       textTheme: const TextTheme(
-        titleLarge:
-            TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
+        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
         bodyMedium: TextStyle(fontSize: 16, color: textDark),
       ),
     );
@@ -51,9 +50,8 @@ class BuyerApp extends StatelessWidget {
       ],
       routes: {
         '/': (_) => const BuyerHomePage(),
-        // حذف const تا خطای "Not a constant expression" رفع شود
-        '/pay/bluetooth': (_) => BluetoothPayScreen(),
-        '/pay/qr': (_) => QrPayScreen(),
+        '/pay/bluetooth': (_) => BluetoothPayScreen(), // بدون const
+        '/pay/qr': (_) => QrPayScreen(),               // بدون const + ایمپورت بالا
       },
       initialRoute: '/',
     );
@@ -94,8 +92,8 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg, textDirection: TextDirection.rtl),
-        backgroundColor: success ? const Color(0xFF27AE60) : Colors.grey[800],
+        content: Text(msg), // دیگه TextDirection.rtl لازم نیست
+        backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
       ),
     );
   }
@@ -106,16 +104,16 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     const Color successGreen = Color(0xFF27AE60);
     const Color textDark = Color(0xFF0B2545);
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: primaryTurquoise,
-        foregroundColor: Colors.white,
-        title: const Text('اپ آفلاین سوما', textDirection: TextDirection.rtl),
-        centerTitle: true,
-      ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
-        child: Padding(
+    return Directionality( // یک‌بار برای کل صفحه
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: primaryTurquoise,
+          foregroundColor: Colors.white,
+          title: const Text('اپ آفلاین سوما'),
+          centerTitle: true,
+        ),
+        body: Padding(
           padding: const EdgeInsets.all(16),
           child: ListView(
             children: [
@@ -127,8 +125,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: primaryTurquoise.withOpacity(0.25)),
+                  border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
                 ),
                 child: Row(
                   children: [
@@ -143,8 +140,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                     const Spacer(),
                     ElevatedButton(
                       onPressed: _refreshBalance,
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryTurquoise),
+                      style: ElevatedButton.styleFrom(backgroundColor: primaryTurquoise),
                       child: const Text('بروزرسانی'),
                     )
                   ],
@@ -157,8 +153,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: primaryTurquoise.withOpacity(0.25)),
+                  border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -206,24 +201,24 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Text(
-                  'برای تست واقعی بلوتوث، اجازه داده‌شده و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
+                  'برای تست واقعی بلوتوث، اجازه‌ها را بدهید و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
                   textAlign: TextAlign.center,
                 ),
               ),
             ],
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: successGreen,
-        foregroundColor: Colors.white,
-        onPressed: () {
-          LocalDB.instance.addBuyerBalance(100000);
-          _showSnack('۱۰۰٬۰۰۰ ریال به موجودی آزمایشی اضافه شد.', success: true);
-          _refreshBalance();
-        },
-        label: const Text('افزایش موجودی آزمایشی'),
-        icon: const Icon(Icons.add_card),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: successGreen,
+          foregroundColor: Colors.white,
+          onPressed: () {
+            LocalDB.instance.addBuyerBalance(100000);
+            _showSnack('۱۰۰٬۰۰۰ ریال به موجودی آزمایشی اضافه شد.', success: true);
+            _refreshBalance();
+          },
+          label: const Text('افزایش موجودی آزمایشی'),
+          icon: const Icon(Icons.add_card),
+        ),
       ),
     );
   }
@@ -258,15 +253,11 @@ class _PaymentCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                  backgroundColor: color,
-                  foregroundColor: Colors.white,
-                  child: Icon(icon)),
+              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(title,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600)),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               const Icon(Icons.chevron_left),
             ],
