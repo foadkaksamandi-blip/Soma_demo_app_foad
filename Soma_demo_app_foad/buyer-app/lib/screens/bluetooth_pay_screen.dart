@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:uuid/uuid.dart';
@@ -117,160 +118,54 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
   Widget build(BuildContext context) {
     const Color primaryTurquoise = Color(0xFF1ABC9C);
 
-    return const Directionality(
+    return Directionality(
       textDirection: TextDirection.rtl,
-      child: _BluetoothPayBody(),
-    );
-  }
-}
-
-class _BluetoothPayBody extends StatefulWidget {
-  const _BluetoothPayBody();
-
-  @override
-  State<_BluetoothPayBody> createState() => _BluetoothPayBodyState();
-}
-
-class _BluetoothPayBodyState extends State<_BluetoothPayBody> {
-  final TextEditingController _amountCtrl = TextEditingController();
-  BluetoothDevice? _selected;
-  bool _busy = false;
-  String? _status;
-  String? _txnId;
-
-  void _show(String msg, {bool ok = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: ok ? const Color(0xFF27AE60) : Colors.black87),
-    );
-  }
-
-  Future<void> _selectDevice() async {
-    final enabled = await FlutterBluetoothSerial.instance.isEnabled;
-    if (!(enabled ?? false)) {
-      await FlutterBluetoothSerial.instance.requestEnable();
-    }
-    final bonded = await FlutterBluetoothSerial.instance.getBondedDevices();
-    if (bonded.isEmpty) {
-      _show('هیچ دستگاه جفت‌شده‌ای نیست. ابتدا Pair کنید.');
-      return;
-    }
-    final dev = await showModalBottomSheet<BluetoothDevice>(
-      context: context,
-      builder: (_) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: ListView(
-          children: bonded
-              .map((d) => ListTile(
-                    title: Text(d.name ?? d.address),
-                    subtitle: Text(d.address),
-                    onTap: () => Navigator.pop(context, d),
-                  ))
-              .toList(),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('پرداخت با بلوتوث'),
+          backgroundColor: primaryTurquoise,
+          foregroundColor: Colors.white,
+          centerTitle: true,
         ),
-      ),
-    );
-    if (dev != null) setState(() => _selected = dev);
-  }
-
-  Future<void> _pay() async {
-    final amount = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    if (amount <= 0) {
-      _show('مبلغ را وارد کنید.');
-      return;
-    }
-    if (_selected == null) {
-      _show('ابتدا دستگاه فروشنده را انتخاب کنید.');
-      return;
-    }
-
-    setState(() {
-      _busy = true;
-      _status = 'در حال اتصال…';
-    });
-
-    try {
-      final conn = await BluetoothConnection.toAddress(_selected!.address);
-      setState(() => _status = 'اتصال ایمن برقرار شد.');
-      final payload = jsonEncode({
-        'type': 'soma_payment',
-        'amount': amount,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-      conn.output.add(Uint8List.fromList(utf8.encode('$payload\n')));
-      await conn.output.allSent;
-
-      final buffer = StringBuffer();
-      await for (final data in conn.input!.map(utf8.decode)) {
-        buffer.write(data);
-        if (buffer.toString().contains('\n')) break;
-      }
-      final resp = buffer.toString().trim();
-      await conn.close();
-
-      if (resp == 'OK') {
-        LocalDB.instance.addBuyerBalance(-amount);
-        setState(() => _txnId = const Uuid().v4());
-        _show('پرداخت موفق. کد تراکنش: $_txnId', ok: true);
-      } else {
-        _show('پاسخ نامعتبر: $resp');
-      }
-    } catch (e) {
-      _show('خطا: $e');
-    } finally {
-      setState(() {
-        _busy = false;
-        _status = null;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('پرداخت با بلوتوث'),
-        backgroundColor: primaryTurquoise,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            const Text('مبلغ پرداخت'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _amountCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                hintText: 'مثلاً ۵۰۰۰۰۰',
-                border: OutlineInputBorder(),
-                isDense: true,
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            children: [
+              const Text('مبلغ پرداخت'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _amountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  hintText: 'مثلاً ۵۰۰۰۰۰',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _selectDevice,
-              icon: const Icon(Icons.bluetooth_searching),
-              label: Text(_selected == null ? 'انتخاب دستگاه فروشنده' : (_selected!.name ?? _selected!.address)),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _busy ? null : _pay,
-              icon: const Icon(Icons.send),
-              label: const Text('پرداخت'),
-            ),
-            if (_status != null) ...[
               const SizedBox(height: 12),
-              Text(_status!),
-            ],
-            if (_txnId != null) ...[
+              ElevatedButton.icon(
+                onPressed: _loadBonded,
+                icon: const Icon(Icons.bluetooth_searching),
+                label: Text(_selected == null
+                    ? 'انتخاب دستگاه فروشنده'
+                    : (_selected!.name ?? _selected!.address)),
+              ),
               const SizedBox(height: 12),
-              Text('کد تراکنش: $_txnId'),
+              ElevatedButton.icon(
+                onPressed: _busy ? null : _pay,
+                icon: const Icon(Icons.send),
+                label: const Text('پرداخت'),
+              ),
+              if (_status != null) ...[
+                const SizedBox(height: 12),
+                Text(_status!),
+              ],
+              if (_txnId != null) ...[
+                const SizedBox(height: 12),
+                Text('کد تراکنش: $_txnId'),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
