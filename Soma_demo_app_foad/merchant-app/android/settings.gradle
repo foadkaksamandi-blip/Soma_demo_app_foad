@@ -1,15 +1,15 @@
-rootProject.name = "merchant_app"
+// Project-level build.gradle (minimal). Plugin versions are defined in settings.gradle.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies { }
+}
 
-include(":app")
-
-// ✅ Patch برای namespace نداشتن flutter_bluetooth_serial
-gradle.beforeProject { project ->
-    if (project.name == "flutter_bluetooth_serial") {
-        project.afterEvaluate {
-            if (!project.hasProperty("android")) return
-            project.android {
-                namespace = "com.soma.foad.merchant.bluetooth"
-            }
-        }
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
     }
 }
