@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:uuid/uuid.dart';
@@ -14,7 +13,6 @@ class BluetoothPayScreen extends StatefulWidget {
 }
 
 class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
-  final FlutterBluePlus flutterBlue = FlutterBluePlus.instance;
   StreamSubscription<List<ScanResult>>? _scanSub;
   BluetoothDevice? _selected;
   String? _txId;
@@ -26,17 +24,20 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
   }
 
   Future<void> _startScan() async {
-    await flutterBlue.stopScan();
-    _scanSub = flutterBlue.scanResults.listen((results) {
+    // گوش‌دادن به نتایج اسکن
+    _scanSub?.cancel();
+    _scanSub = FlutterBluePlus.scanResults.listen((results) {
       if (results.isNotEmpty && mounted) {
         setState(() {
           _selected = results.first.device;
         });
       }
     });
-    await flutterBlue.startScan(timeout: const Duration(seconds: 6));
+
+    // شروع اسکن (API استاتیک)
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
     await Future.delayed(const Duration(seconds: 6));
-    await flutterBlue.stopScan();
+    await FlutterBluePlus.stopScan();
   }
 
   Future<void> _connectAndPay() async {
@@ -49,9 +50,8 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
     try {
       await _selected!.connect(timeout: const Duration(seconds: 10));
 
-      final amount = widget.enteredAmountRials > 0
-          ? widget.enteredAmountRials
-          : 10000;
+      final amount =
+          widget.enteredAmountRials > 0 ? widget.enteredAmountRials : 10000;
 
       if (LocalDB.instance.buyerBalance < amount) {
         ScaffoldMessenger.of(context)
@@ -65,9 +65,9 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('پرداخت موفق! کد تراکنش: $_txId'),
-            backgroundColor: const Color(0xFF27AE60),
+          const SnackBar(
+            content: Text('پرداخت موفق انجام شد'),
+            backgroundColor: Color(0xFF27AE60),
           ),
         );
       }
@@ -103,9 +103,11 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
               const SizedBox(height: 12),
               if (_selected != null)
                 ListTile(
-                  title: Text(_selected!.platformName.isNotEmpty
-                      ? _selected!.platformName
-                      : _selected!.remoteId.str),
+                  title: Text(
+                    _selected!.platformName.isNotEmpty
+                        ? _selected!.platformName
+                        : _selected!.remoteId.str,
+                  ),
                   subtitle: const Text('دستگاه انتخاب‌شده'),
                 ),
               const Spacer(),
