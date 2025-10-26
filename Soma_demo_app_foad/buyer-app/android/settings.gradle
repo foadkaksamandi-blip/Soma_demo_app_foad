@@ -20,18 +20,29 @@ pluginManagement {
 }
 
 plugins {
-    // Loader plugin required by Flutter 3.x
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "8.1.1" apply false
-    id "com.android.library" version "8.1.1" apply false
+    id "com.android.library"    version "8.1.1" apply false
     id "org.jetbrains.kotlin.android" version "1.9.10" apply false
 }
 
 include(":app")
 
-// === Patch: add namespace for flutter_bluetooth_serial (non-destructive) ===
+// === PATCH for flutter_bluetooth_serial (AGP 8.x) ===
+// 1) حذف خاصیت package از AndroidManifest.xml لایبرری (دیگه مجاز نیست)
+// 2) تزریق namespace برای لایبرری
 gradle.beforeProject { project ->
     if (project.name == "flutter_bluetooth_serial") {
+        // حذف package="..." از مانیفست لایبرری
+        def manifestFile = new File(project.projectDir, "src/main/AndroidManifest.xml")
+        if (manifestFile.exists()) {
+            def txt = manifestFile.getText("UTF-8")
+            def newTxt = txt.replaceAll(/package="[^"]*"/, "")
+            if (newTxt != txt) {
+                manifestFile.write(newTxt, "UTF-8")
+            }
+        }
+        // تزریق namespace اگر تعریف نشده باشد
         project.plugins.withId("com.android.library") {
             if (!project.android.hasProperty("namespace") || !project.android.namespace) {
                 project.android.namespace = "com.soma.buyer.bluetooth"
