@@ -1,9 +1,10 @@
+// Soma_demo_app_foad/buyer-app/lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
-import 'screens/qr_pay_screen.dart'; // خیلی مهم: ایمپورت مستقیم صفحه QR
+import 'screens/qr_pay_screen.dart';
 import 'services/local_db.dart';
 
 void main() {
@@ -32,7 +33,8 @@ class BuyerApp extends StatelessWidget {
         brightness: Brightness.light,
       ),
       textTheme: const TextTheme(
-        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
+        titleLarge:
+            TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
         bodyMedium: TextStyle(fontSize: 16, color: textDark),
       ),
     );
@@ -50,8 +52,8 @@ class BuyerApp extends StatelessWidget {
       ],
       routes: {
         '/': (_) => const BuyerHomePage(),
-        '/pay/bluetooth': (_) => BluetoothPayScreen(), // بدون const
-        '/pay/qr': (_) => QrPayScreen(),               // بدون const + ایمپورت بالا
+        '/pay/bluetooth': (_) => const BluetoothPayScreen(),
+        '/pay/qr': (_) => const QrPayScreen(), // مطمئن باش کلاس همین نام را دارد
       },
       initialRoute: '/',
     );
@@ -68,6 +70,7 @@ class BuyerHomePage extends StatefulWidget {
 class _BuyerHomePageState extends State<BuyerHomePage> {
   int balance = LocalDB.instance.buyerBalance;
   final TextEditingController amountCtrl = TextEditingController();
+  final _nf = NumberFormat.decimalPattern('fa');
 
   @override
   void initState() {
@@ -81,18 +84,16 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     super.dispose();
   }
 
-  String _format(int rials) => NumberFormat.decimalPattern('fa').format(rials);
+  String _format(int rials) => _nf.format(rials);
 
   void _refreshBalance() {
-    setState(() {
-      balance = LocalDB.instance.buyerBalance;
-    });
+    setState(() => balance = LocalDB.instance.buyerBalance);
   }
 
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg), // دیگه TextDirection.rtl لازم نیست
+        content: Text(msg), // ❗️بدون TextDirection.rtl
         backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
       ),
     );
@@ -119,6 +120,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
             children: [
               Text('اپ خریدار', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 16),
+
               // موجودی
               Container(
                 padding: const EdgeInsets.all(16),
@@ -129,25 +131,32 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.account_balance_wallet, color: successGreen),
+                    const Icon(Icons.account_balance_wallet, color: successGreen),
                     const SizedBox(width: 8),
-                    Text('${_format(balance)} ریال',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: textDark,
-                        )),
+                    Text(
+                      '${_format(balance)} ریال',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: textDark,
+                      ),
+                    ),
                     const Spacer(),
                     ElevatedButton(
                       onPressed: _refreshBalance,
-                      style: ElevatedButton.styleFrom(backgroundColor: primaryTurquoise),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryTurquoise,
+                        foregroundColor: Colors.white,
+                      ),
                       child: const Text('بروزرسانی'),
-                    )
+                    ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
-              // مبلغ
+
+              // مبلغ خرید
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -172,14 +181,19 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
+
               // نحوه پرداخت
-              Text('نحوه پرداخت',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge!
-                      .copyWith(color: primaryTurquoise)),
+              Text(
+                'نحوه پرداخت',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge!
+                    .copyWith(color: primaryTurquoise),
+              ),
               const SizedBox(height: 8),
+
               _PaymentCard(
                 icon: Icons.bluetooth,
                 title: 'پرداخت با بلوتوث',
@@ -193,6 +207,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 color: successGreen,
                 onTap: () => Navigator.pushNamed(context, '/pay/qr'),
               ),
+
               const SizedBox(height: 24),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -201,13 +216,14 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Text(
-                  'برای تست واقعی بلوتوث، اجازه‌ها را بدهید و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
+                  'برای تست واقعی بلوتوث، مجوزها را بدهید و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
                   textAlign: TextAlign.center,
                 ),
               ),
             ],
           ),
         ),
+
         floatingActionButton: FloatingActionButton.extended(
           backgroundColor: successGreen,
           foregroundColor: Colors.white,
@@ -253,11 +269,18 @@ class _PaymentCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
+              CircleAvatar(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                child: Icon(icon),
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                child: Text(
+                  title,
+                  style:
+                      const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
               ),
               const Icon(Icons.chevron_left),
             ],
