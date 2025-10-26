@@ -1,8 +1,9 @@
-plugins {
-    id "com.android.application"
-    id "kotlin-android"
-    id "dev.flutter.flutter-gradle-plugin"
-}
+def flutterVersionCode = 1
+def flutterVersionName = "1.0"
+
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle" // ✅ روش درست برای Flutter
 
 android {
     namespace "com.soma.buyer"
@@ -12,36 +13,28 @@ android {
         applicationId "com.soma.buyer"
         minSdkVersion 24
         targetSdkVersion 33
-        versionCode 1
-        versionName "1.0"
+        versionCode flutterVersionCode
+        versionName flutterVersionName
         multiDexEnabled true
     }
 
     buildTypes {
         release {
-            // هنگام build نهایی امضا ندارد (برای GitHub Actions ساده)
+            // در دمو از امضای دیباگ استفاده می‌کنیم
+            signingConfig signingConfigs.debug
             minifyEnabled false
             shrinkResources false
-            signingConfig null
         }
         debug {
-            minifyEnabled false
+            debuggable true
         }
     }
 
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
+    lintOptions {
+        disable 'InvalidPackage'
     }
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10"
-    implementation "androidx.core:core-ktx:1.12.0"
-    implementation "androidx.appcompat:appcompat:1.6.1"
-    implementation "com.google.android.material:material:1.9.0"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10"
 }
