@@ -1,4 +1,4 @@
-/// LocalDB ساده و درون‌حافظه‌ای برای اپ فروشنده (نسخه نمایشی)
+/// LocalDB ساده و درون‌حافظه‌ای برای دمو واقعی (Merchant)
 class LocalDBMerchant {
   LocalDBMerchant._();
   static final LocalDBMerchant instance = LocalDBMerchant._();
@@ -17,7 +17,7 @@ class LocalDBMerchant {
     required int amount,
     required String method, // 'BT' | 'QR'
     required int ts,
-    required String status, // 'SUCCESS' | 'FAIL'
+    required String status, // 'SUCCESS' | 'FAIL' | 'PENDING'
   }) {
     _merchantHistory.add({
       'tx_id': txId,
