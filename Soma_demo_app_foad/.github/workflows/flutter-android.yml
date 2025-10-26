@@ -1,12 +1,12 @@
-name: Flutter Web Sanity (Buyer & Merchant)
+name: Flutter Android APK (Buyer & Merchant)
 
 on:
+  workflow_dispatch:
   push:
     branches: ["**"]
-  pull_request:
 
 jobs:
-  build-web:
+  build-android:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,40 +17,60 @@ jobs:
         with:
           channel: "stable"
 
-      # Buyer app
-      - name: Buyer - Flutter pub get
+      ######################################################
+      # Buyer app: create android, inject permissions, build
+      ######################################################
+      - name: Buyer - flutter pub get
         working-directory: Soma_demo_app_foad/buyer-app
         run: flutter pub get
 
-      - name: Buyer - Analyze
+      - name: Buyer - add android platform
         working-directory: Soma_demo_app_foad/buyer-app
-        run: flutter analyze
+        run: flutter create --platforms=android .
 
-      - name: Buyer - Build web
+      - name: Buyer - inject Bluetooth permissions (Android 12+)
+        run: |
+          MANIFEST="Soma_demo_app_foad/buyer-app/android/app/src/main/AndroidManifest.xml"
+          echo "Injecting Bluetooth permissions into \$MANIFEST"
+          # افزودن مجوزها: BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_SCAN, BLUETOOTH_CONNECT, ACCESS_FINE_LOCATION (برای برخی دستگاه‌ها)
+          perl -0777 -pe 's#(<manifest[^>]*>)#\$1\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#s' -i \$MANIFEST
+          # ویژگی بلوتوث
+          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth" android:required="false"/>\n<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n\n\$1#s' -i \$MANIFEST
+
+      - name: Buyer - build APK
         working-directory: Soma_demo_app_foad/buyer-app
-        run: flutter build web
+        run: flutter build apk --release
 
-      # Merchant app
-      - name: Merchant - Flutter pub get
+      - name: Upload Buyer APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: buyer-app-apk
+          path: Soma_demo_app_foad/buyer-app/build/app/outputs/flutter-apk/app-release.apk
+
+      ########################################################
+      # Merchant app: create android, inject permissions, build
+      ########################################################
+      - name: Merchant - flutter pub get
         working-directory: Soma_demo_app_foad/merchant-app
         run: flutter pub get
 
-      - name: Merchant - Analyze
+      - name: Merchant - add android platform
         working-directory: Soma_demo_app_foad/merchant-app
-        run: flutter analyze
+        run: flutter create --platforms=android .
 
-      - name: Merchant - Build web
+      - name: Merchant - inject Bluetooth permissions (Android 12+)
+        run: |
+          MANIFEST="Soma_demo_app_foad/merchant-app/android/app/src/main/AndroidManifest.xml"
+          echo "Injecting Bluetooth permissions into \$MANIFEST"
+          perl -0777 -pe 's#(<manifest[^>]*>)#\$1\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#s' -i \$MANIFEST
+          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth" android:required="false"/>\n<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n\n\$1#s' -i \$MANIFEST
+
+      - name: Merchant - build APK
         working-directory: Soma_demo_app_foad/merchant-app
-        run: flutter build web
+        run: flutter build apk --release
 
-      - name: Upload Buyer Web Artifact
+      - name: Upload Merchant APK
         uses: actions/upload-artifact@v4
         with:
-          name: buyer-web-build
-          path: Soma_demo_app_foad/buyer-app/build/web
-
-      - name: Upload Merchant Web Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: merchant-web-build
-          path: Soma_demo_app_foad/merchant-app/build/web
+          name: merchant-app-apk
+          path: Soma_demo_app_foad/merchant-app/build/app/outputs/flutter-apk/app-release.apk
