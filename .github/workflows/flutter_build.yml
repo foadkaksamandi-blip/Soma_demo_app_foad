@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -14,32 +13,54 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
+          channel: "stable"
 
-      - name: Install dependencies (Buyer)
-        working-directory: buyer-app
+      # ---------- Buyer ----------
+      - name: Buyer - flutter pub get
+        working-directory: Soma_demo_app_foad/buyer-app
         run: flutter pub get
 
-      - name: Build Buyer APK
-        working-directory: buyer-app
-        run: flutter build apk --release
+      - name: Buyer - ensure android platform
+        working-directory: Soma_demo_app_foad/buyer-app
+        run: flutter create --platforms=android .
 
-      - name: Install dependencies (Merchant)
-        working-directory: merchant-app
-        run: flutter pub get
+      - name: Buyer - inject Bluetooth/Camera permissions
+        run: |
+          MANIFEST="Soma_demo_app_foad/buyer-app/android/app/src/main/AndroidManifest.xml"
+          perl -0777 -pe 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.CAMERA"/>#s' -i $MANIFEST
+          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth" android:required="false"/>\n<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n<uses-feature android:name="android.hardware.camera" android:required="false"/>\n\n$1#s' -i $MANIFEST
 
-      - name: Build Merchant APK
-        working-directory: merchant-app
+      - name: Buyer - build APK (release)
+        working-directory: Soma_demo_app_foad/buyer-app
         run: flutter build apk --release
 
       - name: Upload Buyer APK
         uses: actions/upload-artifact@v4
         with:
           name: buyer_app-release
-          path: buyer-app/build/app/outputs/flutter-apk/app-release.apk
+          path: Soma_demo_app_foad/buyer-app/build/app/outputs/flutter-apk/app-release.apk
+
+      # ---------- Merchant ----------
+      - name: Merchant - flutter pub get
+        working-directory: Soma_demo_app_foad/merchant-app
+        run: flutter pub get
+
+      - name: Merchant - ensure android platform
+        working-directory: Soma_demo_app_foad/merchant-app
+        run: flutter create --platforms=android .
+
+      - name: Merchant - inject Bluetooth/Camera permissions
+        run: |
+          MANIFEST="Soma_demo_app_foad/merchant-app/android/app/src/main/AndroidManifest.xml"
+          perl -0777 -pe 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.CAMERA"/>#s' -i $MANIFEST
+          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth" android:required="false"/>\n<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n<uses-feature android:name="android.hardware.camera" android:required="false"/>\n\n$1#s' -i $MANIFEST
+
+      - name: Merchant - build APK (release)
+        working-directory: Soma_demo_app_foad/merchant-app
+        run: flutter build apk --release
 
       - name: Upload Merchant APK
         uses: actions/upload-artifact@v4
         with:
           name: merchant_app-release
-          path: merchant-app/build/app/outputs/flutter-apk/app-release.apk
+          path: Soma_demo_app_foad/merchant-app/build/app/outputs/flutter-apk/app-release.apk
