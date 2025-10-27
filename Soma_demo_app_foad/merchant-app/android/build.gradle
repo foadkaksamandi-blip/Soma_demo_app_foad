@@ -1,17 +1,4 @@
-// Top-level build file for the merchant app (Flutter embedding v2)
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-        maven { url "https://storage.googleapis.com/download.flutter.io" }
-    }
-    dependencies {
-        classpath "com.android.tools.build:gradle:8.1.1"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.10"
-        classpath "dev.flutter:flutter-gradle-plugin:1.0.0"
-    }
-}
-
+// Top-level build for Merchant
 allprojects {
     repositories {
         google()
