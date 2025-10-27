@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
-import 'screens/qr_pay_screen.dart';
+import 'screens/scan_qr_screen.dart';
 import 'services/local_db.dart';
 
 void main() {
@@ -39,10 +39,8 @@ class BuyerApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'اپ آفلاین سوما — خریدار',
+      title: 'اپ خریدار سوما',
       theme: theme,
-      // ست کردن فارسی باعث می‌شود کل اپ به‌صورت RTL رندر شود؛
-      // دیگر نیازی به textDirection در ویجت‌ها نیست.
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
       localizationsDelegates: const [
@@ -53,7 +51,7 @@ class BuyerApp extends StatelessWidget {
       routes: {
         '/': (_) => const BuyerHomePage(),
         '/pay/bluetooth': (_) => const BluetoothPayScreen(),
-        '/pay/qr': (_) => const QrPayScreen(),
+        '/pay/qr': (_) => const ScanQrScreen(),
       },
       initialRoute: '/',
     );
@@ -72,6 +70,9 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
   final TextEditingController amountCtrl = TextEditingController();
   final _nf = NumberFormat.decimalPattern('fa');
 
+  // منبع پرداخت انتخابی
+  String _source = 'یارانه'; // 'یارانه' | 'اضطراری' | 'رمز ارز ملی'
+
   @override
   void initState() {
     super.initState();
@@ -84,26 +85,19 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     super.dispose();
   }
 
-  String _format(int rials) => _nf.format(rials);
+  String _fmt(int rials) => _nf.format(rials);
 
-  void _refreshBalance() {
-    setState(() => balance = LocalDB.instance.buyerBalance);
-  }
+  void _refreshBalance() => setState(() => balance = LocalDB.instance.buyerBalance);
 
   void _showSnack(String msg, {bool success = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87,
-      ),
+      SnackBar(content: Text(msg), backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
-    const Color successGreen = Color(0xFF27AE60);
-    const Color textDark = Color(0xFF0B2545);
+    const primaryTurquoise = Color(0xFF1ABC9C);
 
     return Scaffold(
       appBar: AppBar(
@@ -116,10 +110,10 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            Text('اپ خریدار', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
+            Text('کیف پول', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
 
-            // موجودی
+            // کارت موجودی
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -129,16 +123,9 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.account_balance_wallet, color: successGreen),
+                  const Icon(Icons.account_balance_wallet, color: Color(0xFF27AE60)),
                   const SizedBox(width: 8),
-                  Text(
-                    '${_format(balance)} ریال',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: textDark,
-                    ),
-                  ),
+                  Text('${_fmt(balance)} ریال', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
                   const Spacer(),
                   ElevatedButton(
                     onPressed: _refreshBalance,
@@ -154,59 +141,82 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
 
             const SizedBox(height: 16),
 
+            // انتخاب منبع پرداخت
+            Text('منبع پرداخت', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: const Text('یارانه'),
+                  selected: _source == 'یارانه',
+                  onSelected: (_) => setState(() => _source = 'یارانه'),
+                ),
+                ChoiceChip(
+                  label: const Text('اضطراری'),
+                  selected: _source == 'اضطراری',
+                  onSelected: (_) => setState(() => _source = 'اضطراری'),
+                ),
+                ChoiceChip(
+                  label: const Text('رمز ارز ملی'),
+                  selected: _source == 'رمز ارز ملی',
+                  onSelected: (_) => setState(() => _source = 'رمز ارز ملی'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
             // مبلغ خرید
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('مبلغ خرید'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'مثلاً ۵۰۰٬۰۰۰ ریال',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                  ),
-                ],
+            Text('مبلغ خرید', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: amountCtrl,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                hintText: 'مثلاً ۵۰۰٬۰۰۰ ریال',
+                border: OutlineInputBorder(),
+                isDense: true,
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // نحوه پرداخت
-            Text(
-              'نحوه پرداخت',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge!
-                  .copyWith(color: primaryTurquoise),
-            ),
+            // روش پرداخت
+            Text('نحوه پرداخت', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
             const SizedBox(height: 8),
 
             _PaymentCard(
               icon: Icons.bluetooth,
-              title: 'پرداخت با بلوتوث',
               color: primaryTurquoise,
-              onTap: () => Navigator.pushNamed(context, '/pay/bluetooth'),
+              title: 'پرداخت با بلوتوث',
+              onTap: () {
+                final amt = int.tryParse(amountCtrl.text.replaceAll(',', '').replaceAll('٬', '')) ?? 0;
+                Navigator.pushNamed(
+                  context,
+                  '/pay/bluetooth',
+                  arguments: {'amount': amt, 'source': _source},
+                );
+              },
             ),
             const SizedBox(height: 8),
             _PaymentCard(
-              icon: Icons.qr_code_2,
-              title: 'پرداخت با QR کد',
-              color: successGreen,
-              onTap: () => Navigator.pushNamed(context, '/pay/qr'),
+              icon: Icons.qr_code_scanner,
+              color: const Color(0xFF27AE60),
+              title: 'پرداخت با اسکن QR',
+              onTap: () {
+                final amt = int.tryParse(amountCtrl.text.replaceAll(',', '').replaceAll('٬', '')) ?? 0;
+                Navigator.pushNamed(
+                  context,
+                  '/pay/qr',
+                  arguments: {'expectedAmount': amt, 'source': _source},
+                );
+              },
             ),
 
             const SizedBox(height: 24),
+
+            // توضیح
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -214,7 +224,8 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
-                'برای تست واقعی بلوتوث، مجوزها را بدهید و دستگاه‌ها را جفت کنید؛ QR واقعی تولید و اسکن می‌شود.',
+                'واقعی: تولید و اسکنِ کد QR برای تست واقعی بلوتوث با جفت‌کردن دستگاه‌ها و دادن مجوزها. '
+                'اسکن دوربین در این نسخه فعال است.',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -222,8 +233,9 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
         ),
       ),
 
+      // افزایش موجودی آزمایشی
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: successGreen,
+        backgroundColor: const Color(0xFF27AE60),
         foregroundColor: Colors.white,
         onPressed: () {
           LocalDB.instance.addBuyerBalance(100000);
@@ -266,17 +278,10 @@ class _PaymentCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                child: Icon(icon),
-              ),
+              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
+                child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
               const Icon(Icons.chevron_left),
             ],
