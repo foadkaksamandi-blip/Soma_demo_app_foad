@@ -1,160 +1,130 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'dart:convert';
 
 class BluetoothReceiveScreen extends StatefulWidget {
-  const BluetoothReceiveScreen({super.key});
+  const BluetoothReceiveScreen({Key? key}) : super(key: key);
 
   @override
   State<BluetoothReceiveScreen> createState() => _BluetoothReceiveScreenState();
 }
 
 class _BluetoothReceiveScreenState extends State<BluetoothReceiveScreen> {
-  final List<ScanResult> _results = [];
-  StreamSubscription<List<ScanResult>>? _scanSub;
-  bool _scanning = false;
+  BluetoothDevice? _connectedDevice;
+  BluetoothCharacteristic? _rxCharacteristic;
+  String _receivedData = '';
+  bool _isScanning = false;
+  bool _connected = false;
 
-  String _amountFromArgs(BuildContext context) {
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {};
-    final amount = (args['amount'] ?? '').toString();
-    return amount;
+  Future<void> _startScan() async {
+    setState(() => _isScanning = true);
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+
+    FlutterBluePlus.scanResults.listen((results) async {
+      for (ScanResult r in results) {
+        if (r.device.name.isNotEmpty && !_connected) {
+          await FlutterBluePlus.stopScan();
+          await _connectToDevice(r.device);
+          break;
+        }
+      }
+    });
+
+    setState(() => _isScanning = false);
   }
 
-  Future<void> _ensureOn() async {
-    final state = await FlutterBluePlus.adapterState.first;
-    if (state != BluetoothAdapterState.on) {
-      // تلاش برای روشن کردن (در اندروید ممکن است کار نکند و باید کاربر روشن کند)
-      try {
-        await FlutterBluePlus.turnOn();
-      } catch (_) {}
+  Future<void> _connectToDevice(BluetoothDevice device) async {
+    try {
+      await device.connect();
+    } catch (_) {}
+    setState(() {
+      _connectedDevice = device;
+      _connected = true;
+    });
+
+    List<BluetoothService> services = await device.discoverServices();
+    for (BluetoothService service in services) {
+      for (BluetoothCharacteristic c in service.characteristics) {
+        if (c.properties.notify) {
+          _rxCharacteristic = c;
+          await c.setNotifyValue(true);
+          c.onValueReceived.listen((value) {
+            setState(() {
+              _receivedData = utf8.decode(value);
+            });
+          });
+          break;
+        }
+      }
     }
   }
 
-  Future<void> _startScan() async {
-    if (_scanning) return;
-    setState(() => _scanning = true);
-    _results.clear();
-
-    await FlutterBluePlus.stopScan();
-    _scanSub?.cancel();
-    _scanSub = FlutterBluePlus.scanResults.listen((list) {
-      for (final r in list) {
-        final i = _results.indexWhere((e) => e.device.remoteId == r.device.remoteId);
-        if (i == -1) {
-          _results.add(r);
-        } else {
-          _results[i] = r;
-        }
-      }
-      if (mounted) setState(() {});
-    });
-
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
-    if (mounted) setState(() => _scanning = false);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _ensureOn().then((_) => _startScan());
+  Future<void> _disconnect() async {
+    if (_connectedDevice != null) {
+      await _connectedDevice!.disconnect();
+      setState(() {
+        _connectedDevice = null;
+        _connected = false;
+        _receivedData = '';
+      });
+    }
   }
 
   @override
   void dispose() {
-    _scanSub?.cancel();
-    FlutterBluePlus.stopScan();
+    _disconnect();
     super.dispose();
-  }
-
-  Future<void> _receiveFrom(ScanResult r) async {
-    // برای دمو: اتصال واقعی لازم نیست. فقط اسکن → انتخاب دستگاه → تایید دریافت.
-    // اگر بعداً اتصال GATT خواستی، اینجا انجام بده.
-    await FlutterBluePlus.stopScan();
-    if (!mounted) return;
-
-    final amount = _amountFromArgs(context);
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('دریافت پرداخت'),
-        content: Text(
-          'از دستگاه: ${r.device.platformName.isEmpty ? r.device.remoteId.str : r.device.platformName}\n'
-          'مبلغ: $amount',
-          textDirection: TextDirection.rtl,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('لغو'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context); // بستن دیالوگ
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('پرداخت با بلوتوث دریافت شد.')),
-              );
-              Navigator.pop(context, {'ok': true}); // برگشت به صفحه قبل
-            },
-            child: const Text('تایید دریافت'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final amount = _amountFromArgs(context);
-
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('دریافت با بلوتوث (دمو)'),
-          centerTitle: true,
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _startScan,
-          label: Text(_scanning ? 'درحال اسکن…' : 'اسکن دوباره'),
-          icon: const Icon(Icons.bluetooth_searching),
-        ),
-        body: Column(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Bluetooth Receive'),
+        backgroundColor: Colors.blueGrey.shade900,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
           children: [
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  const Icon(Icons.payments),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('مبلغ تراکنش: $amount',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ],
+            ElevatedButton.icon(
+              onPressed: _isScanning
+                  ? null
+                  : _connected
+                      ? _disconnect
+                      : _startScan,
+              icon: Icon(_connected ? Icons.bluetooth_disabled : Icons.bluetooth_searching),
+              label: Text(_connected ? 'Disconnect' : 'Scan & Connect'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _connected ? Colors.redAccent : Colors.blue,
+                minimumSize: const Size(double.infinity, 48),
               ),
             ),
-            const Divider(height: 1),
+            const SizedBox(height: 20),
+            Text(
+              _connectedDevice != null
+                  ? 'Connected to: ${_connectedDevice!.name}'
+                  : 'Not connected',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
             Expanded(
-              child: _results.isEmpty
-                  ? const Center(child: Text('هیچ دستگاهی پیدا نشد. اسکن را تکرار کنید.'))
-                  : ListView.separated(
-                      itemCount: _results.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
-                        final r = _results[i];
-                        final title =
-                            r.device.platformName.isEmpty ? r.device.remoteId.str : r.device.platformName;
-                        return ListTile(
-                          leading: const CircleAvatar(child: Icon(Icons.bluetooth)),
-                          title: Text(title),
-                          subtitle: Text(r.device.remoteId.str),
-                          trailing: const Icon(Icons.chevron_left),
-                          onTap: () => _receiveFrom(r),
-                        );
-                      },
-                    ),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    _receivedData.isEmpty
+                        ? 'No data received yet...'
+                        : _receivedData,
+                    style: const TextStyle(fontSize: 15),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
