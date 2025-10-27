@@ -1,5 +1,5 @@
-package com.soma.foad.merchant
+package com.soma.merchant
 
 import io.flutter.embedding.android.FlutterActivity
 
-class MainActivity: FlutterActivity()
+class MainActivity : FlutterActivity()
