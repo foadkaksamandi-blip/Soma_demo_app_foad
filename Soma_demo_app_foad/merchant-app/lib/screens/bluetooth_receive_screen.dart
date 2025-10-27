@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class BluetoothReceiveScreen extends StatefulWidget {
   const BluetoothReceiveScreen({super.key});
@@ -8,72 +10,153 @@ class BluetoothReceiveScreen extends StatefulWidget {
 }
 
 class _BluetoothReceiveScreenState extends State<BluetoothReceiveScreen> {
-  bool isBluetoothEnabled = false;
-  bool isScanning = false;
-  String status = 'برای دریافت پرداخت بلوتوث، اسکن را شروع کنید.';
+  final List<ScanResult> _results = [];
+  StreamSubscription<List<ScanResult>>? _scanSub;
+  bool _scanning = false;
 
-  Future<void> _toggleBluetooth() async {
-    // TODO: در نسخه‌ی بعدی به بلوتوث واقعی وصل می‌شود.
-    setState(() {
-      isBluetoothEnabled = !isBluetoothEnabled;
-      status = isBluetoothEnabled ? 'بلوتوث فعال شد.' : 'بلوتوث غیرفعال شد.';
-    });
+  String _amountFromArgs(BuildContext context) {
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>? ?? {};
+    final amount = (args['amount'] ?? '').toString();
+    return amount;
+  }
+
+  Future<void> _ensureOn() async {
+    final state = await FlutterBluePlus.adapterState.first;
+    if (state != BluetoothAdapterState.on) {
+      // تلاش برای روشن کردن (در اندروید ممکن است کار نکند و باید کاربر روشن کند)
+      try {
+        await FlutterBluePlus.turnOn();
+      } catch (_) {}
+    }
   }
 
   Future<void> _startScan() async {
-    setState(() {
-      isScanning = true;
-      status = 'درحال جستجو برای دستگاه فروشنده...';
+    if (_scanning) return;
+    setState(() => _scanning = true);
+    _results.clear();
+
+    await FlutterBluePlus.stopScan();
+    _scanSub?.cancel();
+    _scanSub = FlutterBluePlus.scanResults.listen((list) {
+      for (final r in list) {
+        final i = _results.indexWhere((e) => e.device.remoteId == r.device.remoteId);
+        if (i == -1) {
+          _results.add(r);
+        } else {
+          _results[i] = r;
+        }
+      }
+      if (mounted) setState(() {});
     });
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() {
-      isScanning = false;
-      status = 'دستگاه پیدا شد؛ پرداخت آزمایشی دریافت شد.';
-    });
+
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+    if (mounted) setState(() => _scanning = false);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureOn().then((_) => _startScan());
+  }
+
+  @override
+  void dispose() {
+    _scanSub?.cancel();
+    FlutterBluePlus.stopScan();
+    super.dispose();
+  }
+
+  Future<void> _receiveFrom(ScanResult r) async {
+    // برای دمو: اتصال واقعی لازم نیست. فقط اسکن → انتخاب دستگاه → تایید دریافت.
+    // اگر بعداً اتصال GATT خواستی، اینجا انجام بده.
+    await FlutterBluePlus.stopScan();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('پرداخت آزمایشی با موفقیت دریافت شد.')),
+
+    final amount = _amountFromArgs(context);
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('دریافت پرداخت'),
+        content: Text(
+          'از دستگاه: ${r.device.platformName.isEmpty ? r.device.remoteId.str : r.device.platformName}\n'
+          'مبلغ: $amount',
+          textDirection: TextDirection.rtl,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('لغو'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context); // بستن دیالوگ
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('پرداخت با بلوتوث دریافت شد.')),
+              );
+              Navigator.pop(context, {'ok': true}); // برگشت به صفحه قبل
+            },
+            child: const Text('تایید دریافت'),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final amount = _amountFromArgs(context);
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('دریافت بلوتوث'),
+          title: const Text('دریافت با بلوتوث (دمو)'),
           centerTitle: true,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SwitchListTile(
-                value: isBluetoothEnabled,
-                onChanged: (_) => _toggleBluetooth(),
-                title: const Text('فعال‌سازی بلوتوث'),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _startScan,
+          label: Text(_scanning ? 'درحال اسکن…' : 'اسکن دوباره'),
+          icon: const Icon(Icons.bluetooth_searching),
+        ),
+        body: Column(
+          children: [
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const Icon(Icons.payments),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('مبلغ تراکنش: $amount',
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: isBluetoothEnabled && !isScanning ? _startScan : null,
-                icon: const Icon(Icons.bluetooth_searching),
-                label: Text(isScanning ? 'درحال اسکن...' : 'شروع اسکن'),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                status,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16),
-              ),
-              const Spacer(),
-              const Text(
-                'نسخه دمو — پیاده‌سازی بلوتوث واقعی بعد از اتصال دو دستگاه تکمیل می‌شود.',
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: _results.isEmpty
+                  ? const Center(child: Text('هیچ دستگاهی پیدا نشد. اسکن را تکرار کنید.'))
+                  : ListView.separated(
+                      itemCount: _results.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final r = _results[i];
+                        final title =
+                            r.device.platformName.isEmpty ? r.device.remoteId.str : r.device.platformName;
+                        return ListTile(
+                          leading: const CircleAvatar(child: Icon(Icons.bluetooth)),
+                          title: Text(title),
+                          subtitle: Text(r.device.remoteId.str),
+                          trailing: const Icon(Icons.chevron_left),
+                          onTap: () => _receiveFrom(r),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );
