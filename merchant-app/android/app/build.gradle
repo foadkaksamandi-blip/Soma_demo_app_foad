@@ -1,7 +1,6 @@
-// App-level Gradle for Merchant (Flutter, AGP 8.1.1, Kotlin 1.9.10)
 plugins {
     id "com.android.application"
-    id "kotlin-android"
+    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -11,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId "com.soma.merchant"
-        minSdk 21
+        minSdk 24
         targetSdk 33
         versionCode 1
         versionName "1.0"
@@ -19,26 +18,11 @@ android {
 
     buildTypes {
         release {
-            // امضای ریلیز اگر نداری، همین‌طور بدون امضا ساخته می‌شود
             minifyEnabled false
-            shrinkResources false
         }
-        debug { }
     }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-}
-
-flutter {
-    source = "../.."
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.10"
 }
