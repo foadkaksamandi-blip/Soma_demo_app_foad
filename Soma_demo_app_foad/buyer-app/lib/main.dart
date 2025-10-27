@@ -51,7 +51,7 @@ class BuyerApp extends StatelessWidget {
       routes: {
         '/': (_) => const BuyerHomePage(),
         '/pay/bluetooth': (_) => const BluetoothPayScreen(),
-        '/pay/qr': (_) => const ScanQrScreen(),
+        '/pay/qr': (_) => ScanQrScreen(), // ← فقط اینجا const حذف شد
       },
       initialRoute: '/',
     );
@@ -69,9 +69,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
   int balance = LocalDB.instance.buyerBalance;
   final TextEditingController amountCtrl = TextEditingController();
   final _nf = NumberFormat.decimalPattern('fa');
-
-  // منبع پرداخت انتخابی
-  String _source = 'یارانه'; // 'یارانه' | 'اضطراری' | 'رمز ارز ملی'
+  String _source = 'یارانه';
 
   @override
   void initState() {
@@ -112,8 +110,6 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
           children: [
             Text('کیف پول', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 10),
-
-            // کارت موجودی
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -138,36 +134,18 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // انتخاب منبع پرداخت
             Text('منبع پرداخت', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               children: [
-                ChoiceChip(
-                  label: const Text('یارانه'),
-                  selected: _source == 'یارانه',
-                  onSelected: (_) => setState(() => _source = 'یارانه'),
-                ),
-                ChoiceChip(
-                  label: const Text('اضطراری'),
-                  selected: _source == 'اضطراری',
-                  onSelected: (_) => setState(() => _source = 'اضطراری'),
-                ),
-                ChoiceChip(
-                  label: const Text('رمز ارز ملی'),
-                  selected: _source == 'رمز ارز ملی',
-                  onSelected: (_) => setState(() => _source = 'رمز ارز ملی'),
-                ),
+                ChoiceChip(label: const Text('یارانه'), selected: _source == 'یارانه', onSelected: (_) => setState(() => _source = 'یارانه')),
+                ChoiceChip(label: const Text('اضطراری'), selected: _source == 'اضطراری', onSelected: (_) => setState(() => _source = 'اضطراری')),
+                ChoiceChip(label: const Text('رمز ارز ملی'), selected: _source == 'رمز ارز ملی', onSelected: (_) => setState(() => _source = 'رمز ارز ملی')),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // مبلغ خرید
             Text('مبلغ خرید', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
             const SizedBox(height: 8),
             TextField(
@@ -179,24 +157,16 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 isDense: true,
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // روش پرداخت
             Text('نحوه پرداخت', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
             const SizedBox(height: 8),
-
             _PaymentCard(
               icon: Icons.bluetooth,
               color: primaryTurquoise,
               title: 'پرداخت با بلوتوث',
               onTap: () {
                 final amt = int.tryParse(amountCtrl.text.replaceAll(',', '').replaceAll('٬', '')) ?? 0;
-                Navigator.pushNamed(
-                  context,
-                  '/pay/bluetooth',
-                  arguments: {'amount': amt, 'source': _source},
-                );
+                Navigator.pushNamed(context, '/pay/bluetooth', arguments: {'amount': amt, 'source': _source});
               },
             ),
             const SizedBox(height: 8),
@@ -206,34 +176,18 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
               title: 'پرداخت با اسکن QR',
               onTap: () {
                 final amt = int.tryParse(amountCtrl.text.replaceAll(',', '').replaceAll('٬', '')) ?? 0;
-                Navigator.pushNamed(
-                  context,
-                  '/pay/qr',
-                  arguments: {'expectedAmount': amt, 'source': _source},
-                );
+                Navigator.pushNamed(context, '/pay/qr', arguments: {'expectedAmount': amt, 'source': _source});
               },
             ),
-
             const SizedBox(height: 24),
-
-            // توضیح
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: primaryTurquoise.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                'واقعی: تولید و اسکنِ کد QR برای تست واقعی بلوتوث با جفت‌کردن دستگاه‌ها و دادن مجوزها. '
-                'اسکن دوربین در این نسخه فعال است.',
-                textAlign: TextAlign.center,
-              ),
+              decoration: BoxDecoration(color: primaryTurquoise.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
+              child: const Text('واقعی: تولید و اسکن QR برای تست بلوتوث و جفت‌کردن دستگاه‌ها.'),
             ),
           ],
         ),
       ),
-
-      // افزایش موجودی آزمایشی
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color(0xFF27AE60),
         foregroundColor: Colors.white,
@@ -255,12 +209,7 @@ class _PaymentCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _PaymentCard({
-    required this.icon,
-    required this.title,
-    required this.color,
-    required this.onTap,
-  });
+  const _PaymentCard({required this.icon, required this.title, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -272,17 +221,12 @@ class _PaymentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            border: Border.all(color: color.withOpacity(0.25)),
-            borderRadius: BorderRadius.circular(12),
-          ),
+          decoration: BoxDecoration(border: Border.all(color: color.withOpacity(0.25)), borderRadius: BorderRadius.circular(12)),
           child: Row(
             children: [
               CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
               const Icon(Icons.chevron_left),
             ],
           ),
