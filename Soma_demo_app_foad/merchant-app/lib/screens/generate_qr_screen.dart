@@ -1,72 +1,46 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'screens/bluetooth_receive_screen.dart';
-import 'screens/generate_qr_screen.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MerchantApp());
-}
-
-class MerchantApp extends StatelessWidget {
-  const MerchantApp({super.key});
+/// صفحه ساخت QR برای نمایش مبلغ/تراکنش
+class GenerateQrScreen extends StatelessWidget {
+  const GenerateQrScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('fa'),
-      supportedLocales: const [
-        Locale('fa'),
-        Locale('en'),
-      ],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      routes: {
-        '/': (_) => const _Home(),
-        '/bt/receive': (_) => const BluetoothReceiveScreen(),
-        '/qr/generate': (_) => const ScanReceiptScreen(),
-      },
-      initialRoute: '/',
-    );
-  }
-}
+    // آرگومان‌های ورودی از route
+    final args = ModalRoute.of(context)?.settings.arguments;
+    String amount = '0';
+    if (args is Map && args['amount'] != null) {
+      amount = args['amount'].toString();
+    }
 
-class _Home extends StatelessWidget {
-  const _Home({super.key});
+    // داده‌ای که داخل QR قرار می‌گیرد (می‌توان JSON هم گذاشت)
+    final qrPayload = 'SOMA|MERCHANT|AMOUNT=$amount';
 
-  @override
-  Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('اپ آفلاین سوما – فروشنده'),
+          title: const Text('تولید QR پرداخت'),
           centerTitle: true,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
+        body: Center(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ElevatedButton.icon(
-                icon: const Icon(Icons.bluetooth),
-                label: const Text('دریافت پرداخت بلوتوثی'),
-                onPressed: () {
-                  Navigator.pushNamed(context, '/bt/receive',
-                      arguments: {'amount': '50000'});
-                },
+              QrImageView(
+                data: qrPayload,
+                version: QrVersions.auto,
+                size: 220,
+                gapless: true,
               ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.qr_code_2),
-                label: const Text('نمایش QR برای پرداخت'),
-                onPressed: () {
-                  Navigator.pushNamed(context, '/qr/generate');
-                },
+              const SizedBox(height: 16),
+              Text('مبلغ: $amount',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              const Text(
+                'خریدار این QR را اسکن می‌کند تا پرداخت انجام شود.',
+                textAlign: TextAlign.center,
               ),
             ],
           ),
