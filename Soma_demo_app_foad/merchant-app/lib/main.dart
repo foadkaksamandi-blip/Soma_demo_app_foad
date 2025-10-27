@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'screens/generate_qr_screen.dart';
 import 'screens/bluetooth_receive_screen.dart';
-import 'screens/scan_receipt_screen.dart';
-import 'services/local_db.dart';
+import 'screens/generate_screen.dart'; // همون فایل generate شما
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,31 +14,9 @@ class MerchantApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
-    const Color successGreen = Color(0xFF27AE60);
-    const Color textDark = Color(0xFF0B2545);
-    const Color bgLight = Color(0xFFF7FAFC);
-
-    final theme = ThemeData(
-      useMaterial3: true,
-      primaryColor: successGreen,
-      scaffoldBackgroundColor: bgLight,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: successGreen,
-        primary: successGreen,
-        secondary: primaryTurquoise,
-        brightness: Brightness.light,
-      ),
-      textTheme: const TextTheme(
-        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
-        bodyMedium: TextStyle(fontSize: 16, color: textDark),
-      ),
-    );
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'اپ آفلاین سوما — فروشنده',
-      theme: theme,
+      title: 'اپ آفلاین سوما — پذیرنده',
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
       localizationsDelegates: const [
@@ -48,151 +24,44 @@ class MerchantApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
       ],
+      // دقت کن: این Map «const» نیست تا خطای Not a constant expression نگیریم.
       routes: {
-        '/': (_) => const MerchantHomePage(),
-        '/qr/generate': (_) => const GenerateQrScreen(),
+        '/': (_) => const _Home(),
         '/bt/receive': (_) => const BluetoothReceiveScreen(),
-        '/qr/scan-receipt': (_) => const ScanReceiptScreen(),
+        '/qr/generate': (_) => const QrGenerateScreen(),
       },
       initialRoute: '/',
     );
   }
 }
 
-class MerchantHomePage extends StatefulWidget {
-  const MerchantHomePage({super.key});
-
-  @override
-  State<MerchantHomePage> createState() => _MerchantHomePageState();
-}
-
-class _MerchantHomePageState extends State<MerchantHomePage> {
-  int balance = LocalDBMerchant.instance.merchantBalance;
-
-  void _refresh() {
-    setState(() => balance = LocalDBMerchant.instance.merchantBalance);
-  }
+class _Home extends StatelessWidget {
+  const _Home({super.key});
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
-    const Color successGreen = Color(0xFF27AE60);
-    const Color textDark = Color(0xFF0B2545);
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: successGreen,
-          foregroundColor: Colors.white,
-          title: const Text('اپ آفلاین سوما'),
-          centerTitle: true,
-        ),
-        body: Padding(
+        appBar: AppBar(title: const Text('پذیرنده — دمو')),
+        body: ListView(
           padding: const EdgeInsets.all(16),
-          child: ListView(
-            children: [
-              Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: successGreen.withOpacity(0.25)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.account_balance_wallet, color: successGreen),
-                    const SizedBox(width: 8),
-                    Text('موجودی: $balance ریال',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: textDark,
-                        )),
-                    const Spacer(),
-                    ElevatedButton(
-                      onPressed: _refresh,
-                      style: ElevatedButton.styleFrom(backgroundColor: successGreen),
-                      child: const Text('بروزرسانی'),
-                    )
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text('دریافت از طریق',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleLarge!
-                      .copyWith(color: successGreen)),
-              const SizedBox(height: 8),
-              _ActionCard(
-                icon: Icons.bluetooth_searching,
-                title: 'دریافت با بلوتوث',
-                color: primaryTurquoise,
-                onTap: () => Navigator.pushNamed(context, '/bt/receive'),
-              ),
-              const SizedBox(height: 8),
-              _ActionCard(
-                icon: Icons.qr_code_2,
-                title: 'تولید QR برای اسکن خریدار',
-                color: successGreen,
-                onTap: () => Navigator.pushNamed(context, '/qr/generate'),
-              ),
-              const SizedBox(height: 8),
-              _ActionCard(
-                icon: Icons.qr_code_scanner,
-                title: 'اسکن رسید خریدار',
-                color: successGreen,
-                onTap: () => Navigator.pushNamed(context, '/qr/scan-receipt'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionCard({
-    required this.icon,
-    required this.title,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            border: Border.all(color: color.withOpacity(0.25)),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
-              const Icon(Icons.chevron_left),
-            ],
-          ),
+          children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.bluetooth),
+              label: const Text('دریافت پرداخت با بلوتوث'),
+              onPressed: () {
+                Navigator.pushNamed(context, '/bt/receive',
+                    arguments: {'amount': '۵۰۰٬۰۰۰ ریال'});
+              },
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.qr_code_2),
+              label: const Text('تولید QR پرداخت'),
+              onPressed: () => Navigator.pushNamed(context, '/qr/generate'),
+            ),
+          ],
         ),
       ),
     );
