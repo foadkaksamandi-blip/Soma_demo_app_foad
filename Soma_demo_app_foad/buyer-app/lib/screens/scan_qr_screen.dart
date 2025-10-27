@@ -26,9 +26,9 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
     final codes = capture.barcodes;
     if (codes.isEmpty) return;
     _handled = true;
-    final raw = codes.first.rawValue ?? '';
 
-    // انتظار: SOMA|MERCHANT|AMOUNT=xxxx|...
+    final raw = codes.first.rawValue ?? '';
+    // نمونه داده دریافتی: SOMA|MERCHANT|AMOUNT=xxxx|...
     int scannedAmount = 0;
     final parts = raw.split('|');
     for (final p in parts) {
@@ -56,7 +56,6 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              // اینجا می‌توان کسر موجودی را وصل کرد (در صورت وجود سرویس دیتابیس).
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('پرداخت با QR ثبت شد (دمو)')),
