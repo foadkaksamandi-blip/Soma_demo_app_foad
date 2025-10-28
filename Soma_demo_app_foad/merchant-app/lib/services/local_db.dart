@@ -1,32 +1,13 @@
-/// LocalDB ساده و درون‌حافظه‌ای برای دمو واقعی (Merchant)
+// merchant-app/lib/services/local_db.dart
+/// Local in-memory DB (demo)
 class LocalDBMerchant {
   LocalDBMerchant._();
   static final LocalDBMerchant instance = LocalDBMerchant._();
 
-  int _merchantBalance = 0;
-  final List<Map<String, dynamic>> _merchantHistory = [];
-
-  int get merchantBalance => _merchantBalance;
+  int merchantBalance = 0;
 
   void addMerchantBalance(int delta) {
-    _merchantBalance += delta;
+    merchantBalance += delta;
+    if (merchantBalance < 0) merchantBalance = 0;
   }
-
-  void addMerchantTx({
-    required String txId,
-    required int amount,
-    required String method, // 'BT' | 'QR'
-    required int ts,
-    required String status, // 'SUCCESS' | 'FAIL' | 'PENDING'
-  }) {
-    _merchantHistory.add({
-      'tx_id': txId,
-      'amount': amount,
-      'method': method,
-      'ts': ts,
-      'status': status,
-    });
-  }
-
-  List<Map<String, dynamic>> get merchantHistory => List.unmodifiable(_merchantHistory);
 }
