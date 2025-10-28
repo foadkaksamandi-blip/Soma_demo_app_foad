@@ -1,60 +1,61 @@
 // buyer-app/lib/models/tx_log.dart
+import 'dart:math';
+
 class TxLog {
-  final String id;            // کد تراکنش (مثلاً SOMA-20251028-123456)
-  final int amount;           // مبلغ ریالی
-  final String source;        // یارانه | اضطراری | رمز ارز ملی
-  final String method;        // Bluetooth | QR
-  final DateTime createdAt;   // زمان ثبت
-  final String counterparty;  // طرف مقابل (merchant/buyer id اختیاری)
-  final bool success;         // نتیجه
+  final String id;
+  final int amount;
+  final String source;        // عادی / یارانه / اضطراری / رمز ارز ملی
+  final String method;        // QR / Bluetooth
+  final String counterparty;  // merchant / buyer
+  final DateTime at;
 
   TxLog({
     required this.id,
     required this.amount,
     required this.source,
     required this.method,
-    required this.createdAt,
     required this.counterparty,
-    required this.success,
+    required this.at,
   });
 
   factory TxLog.success({
     required int amount,
     required String source,
     required String method,
-    String counterparty = 'merchant',
+    required String counterparty,
   }) {
-    final now = DateTime.now();
-    final code =
-        'SOMA-${now.toIso8601String().replaceAll(RegExp(r"[^0-9]"), "")}-${now.millisecond}';
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final r = Random().nextInt(9999).toString().padLeft(4, '0');
     return TxLog(
-      id: code,
+      id: 'SOMA-$ts-$r',
       amount: amount,
       source: source,
       method: method,
-      createdAt: now,
       counterparty: counterparty,
-      success: true,
+      at: DateTime.now(),
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'amount': amount,
-        'source': source,
-        'method': method,
-        'createdAt': createdAt.toIso8601String(),
-        'counterparty': counterparty,
-        'success': success,
+  Map<String, String> toMap() => {
+        'ID': id,
+        'AMOUNT': amount.toString(),
+        'SOURCE': source,
+        'METHOD': method,
+        'CP': counterparty,
+        'TS': at.millisecondsSinceEpoch.toString(),
       };
 
-  factory TxLog.fromJson(Map<String, dynamic> j) => TxLog(
-        id: j['id'] as String,
-        amount: j['amount'] as int,
-        source: j['source'] as String,
-        method: j['method'] as String,
-        createdAt: DateTime.parse(j['createdAt'] as String),
-        counterparty: (j['counterparty'] as String?) ?? 'merchant',
-        success: (j['success'] as bool?) ?? false,
-      );
+  static TxLog fromMap(Map<String, String> m) {
+    return TxLog(
+      id: m['ID'] ?? '',
+      amount: int.tryParse(m['AMOUNT'] ?? '0') ?? 0,
+      source: m['SOURCE'] ?? 'عادی',
+      method: m['METHOD'] ?? 'QR',
+      counterparty: m['CP'] ?? 'merchant',
+      at: DateTime.fromMillisecondsSinceEpoch(
+        int.tryParse(m['TS'] ?? '0') ?? 0,
+        isUtc: false,
+      ),
+    );
+  }
 }
