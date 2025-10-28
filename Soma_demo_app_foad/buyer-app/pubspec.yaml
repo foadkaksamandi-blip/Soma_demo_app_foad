@@ -11,13 +11,9 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-
-  # اسکن QR (نسخه سازگار با Kotlin 1.9.x و AGP 8.1.x)
-  mobile_scanner: 5.1.1
-
-  # اگر در پروژه از این‌ها استفاده می‌کنی نگه‌شان دار، وگرنه حذف‌شان کن
   intl: ^0.20.2
-  flutter_blue_plus: ^1.31.17
+  mobile_scanner: ^3.2.0      # ← دانگرید برای رفع عدم‌سازگاری Kotlin
+  qr_flutter: ^4.1.0
   uuid: ^4.5.1
 
 dev_dependencies:
