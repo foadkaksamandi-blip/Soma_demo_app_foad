@@ -3,7 +3,7 @@ def flutterVersionName = "1.0"
 
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle" // ✅ روش درست برای Flutter
+apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     namespace "com.soma.buyer"
@@ -20,7 +20,6 @@ android {
 
     buildTypes {
         release {
-            // در دمو از امضای دیباگ استفاده می‌کنیم
             signingConfig signingConfigs.debug
             minifyEnabled false
             shrinkResources false
@@ -32,6 +31,14 @@ android {
 
     lintOptions {
         disable 'InvalidPackage'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = "1.8"
     }
 }
 
