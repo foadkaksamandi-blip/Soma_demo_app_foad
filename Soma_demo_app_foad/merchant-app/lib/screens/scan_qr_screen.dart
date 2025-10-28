@@ -1,6 +1,8 @@
 // merchant-app/lib/screens/scan_qr_screen.dart
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
+import '../services/local_db.dart';
 import '../services/transaction_service.dart';
 import '../models/tx_log.dart';
 
@@ -13,92 +15,29 @@ class ScanQrScreen extends StatefulWidget {
 
 class _ScanQrScreenState extends State<ScanQrScreen> {
   bool _handled = false;
-  int _expectedAmount = 0;
-  String _source = 'یارانه';
+  TxLog? _log;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? {};
-    _expectedAmount = (args['expectedAmount'] as int?) ?? 0;
-    _source = (args['source'] as String?) ?? 'یارانه';
-  }
-
-  void _onDetect(BarcodeCapture capture) {
+  void _onDetect(BarcodeCapture cap) {
     if (_handled) return;
-    final codes = capture.barcodes;
-    if (codes.isEmpty) return;
+    final raw = cap.barcodes.isNotEmpty ? cap.barcodes.first.rawValue ?? '' : '';
+    if (!raw.startsWith('SOMA')) return;
+
+    final m = TransactionService.parseInboundPayload(raw);
+    if ((m['TYPE'] ?? '') != 'CONFIRM') return;
+
+    final log = TxLog.fromMap(m);
+    if (log.amount <= 0) return;
 
     _handled = true;
-    final raw = codes.first.rawValue ?? '';
-    final map = TransactionService.parseInboundPayload(raw);
+    LocalDBMerchant.instance.addMerchantBalance(log.amount);
 
-    // اگر خریدار QR تایید فرستاده بود (CONFIRM=OK) یا درخواست مبلغ بود (ROLE=BUYER/ MERCHANT)
-    final claimedAmount = int.tryParse(map['AMOUNT'] ?? '0') ?? 0;
-    final src = map['SOURCE'] ?? _source;
+    setState(() => _log = log);
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('تأیید دریافت'),
-        content: Text(
-          'مبلغ: ${claimedAmount > 0 ? claimedAmount : _expectedAmount} ریال\n'
-          'منبع: $src\n'
-          'آیا این دریافت ثبت شود؟',
-          textDirection: TextDirection.rtl,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('انصراف'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final amount = claimedAmount > 0 ? claimedAmount : _expectedAmount;
-              final log = TransactionService.applyMerchantCredit(
-                amount: amount,
-                source: src,
-                method: 'QR',
-              );
-              final confirm = TransactionService.buildMerchantConfirm(log: log);
-
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'دریافت ثبت شد. کد تراکنش: ${log.id}',
-                    textDirection: TextDirection.rtl,
-                  ),
-                  backgroundColor: const Color(0xFF27AE60),
-                ),
-              );
-
-              // (اختیاری) نمایش QR یا متن تأیید برای خریدار
-              showDialog(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text('تأیید فروشنده'),
-                  content: Text(
-                    confirm,
-                    textDirection: TextDirection.ltr,
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('بستن'),
-                    ),
-                  ],
-                ),
-              );
-
-              Navigator.pop(context);
-            },
-            child: const Text('ثبت دریافت'),
-          ),
-        ],
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('دریافت ${log.amount} ریال ثبت شد. کد: ${log.id}',
+            textDirection: TextDirection.rtl),
+        backgroundColor: Colors.green,
       ),
     );
   }
@@ -107,14 +46,33 @@ class _ScanQrScreenState extends State<ScanQrScreen> {
   Widget build(BuildContext context) {
     const successGreen = Color(0xFF27AE60);
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: successGreen,
-        foregroundColor: Colors.white,
-        title: const Text('اسکن QR (فروشنده)'),
-        centerTitle: true,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: successGreen,
+          foregroundColor: Colors.white,
+          title: const Text('اسکن تایید خریدار'),
+          centerTitle: true,
+        ),
+        body: Column(
+          children: [
+            Expanded(child: MobileScanner(onDetect: _onDetect)),
+            if (_log != null)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    Text('کد تراکنش: ${_log!.id}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text('مبلغ: ${_log!.amount} ریال'),
+                    Text('کیف: ${_log!.source} — روش: ${_log!.method}'),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
-      body: MobileScanner(onDetect: _onDetect),
     );
   }
 }
