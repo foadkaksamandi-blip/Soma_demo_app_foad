@@ -12,7 +12,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.2
-  mobile_scanner: ^3.2.0      # ← دانگرید برای رفع عدم‌سازگاری Kotlin
+  mobile_scanner: ^3.2.0
   qr_flutter: ^4.1.0
   uuid: ^4.5.1
 
