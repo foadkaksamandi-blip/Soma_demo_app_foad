@@ -1,106 +1,83 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import '../services/transaction_service.dart';
+import '../services/local_db.dart';
+import '../models/tx_log.dart';
 
-class ScanQrScreen extends StatefulWidget {
-  const ScanQrScreen({super.key});
+class QrPayScreen extends StatefulWidget {
+  const QrPayScreen({super.key});
 
   @override
-  State<ScanQrScreen> createState() => _ScanQrScreenState();
+  State<QrPayScreen> createState() => _QrPayScreenState();
 }
 
-class _ScanQrScreenState extends State<ScanQrScreen> {
-  bool _handled = false;
-  int _expectedAmount = 0;
-  String _source = 'یارانه';
+class _QrPayScreenState extends State<QrPayScreen> {
+  bool _scanned = false;
+  String? _last;
+  String _source = 'عادی';
 
-  @override
-  void initState() {
-    super.initState();
-    final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? {};
-    _expectedAmount = (args['expectedAmount'] as int?) ?? 0;
-    _source = (args['source'] as String?) ?? 'یارانه';
-  }
+  void _onDetect(BarcodeCapture cap) {
+    if (_scanned) return;
+    final raw = cap.barcodes.first.rawValue ?? '';
+    if (!raw.startsWith('SOMA')) return;
 
-  void _onDetect(BarcodeCapture capture) {
-    if (_handled) return;
-    final codes = capture.barcodes;
-    if (codes.isEmpty) return;
-    _handled = true;
+    _scanned = true;
+    _last = raw;
 
-    final raw = codes.first.rawValue ?? '';
-    // نمونه داده دریافتی: SOMA|MERCHANT|AMOUNT=xxxx|...
-    int scannedAmount = 0;
-    final parts = raw.split('|');
-    for (final p in parts) {
-      if (p.startsWith('AMOUNT=')) {
-        scannedAmount = int.tryParse(p.split('=').last) ?? 0;
-      }
-    }
+    final data = TransactionService.parseInboundPayload(raw);
+    final amount = int.tryParse(data['AMOUNT'] ?? '0') ?? 0;
+    final src = data['SOURCE'] ?? 'عادی';
 
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('تأیید پرداخت'),
-        content: Text(
-          'پرداخت با QR شناسایی شد.\n'
-          'مبلغ: ${scannedAmount > 0 ? scannedAmount : _expectedAmount} ریال\n'
-          'منبع: $_source',
+    if (amount > 0) {
+      LocalDB.instance.addToWallet(src, -amount);
+      final log = TxLog.success(
+        amount: amount,
+        source: src,
+        method: 'QR',
+        counterparty: 'merchant',
+      );
+      final confirm = TransactionService.buildMerchantConfirm(log: log);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('پرداخت ${amount} ریال از $_source انجام شد.'),
+          backgroundColor: Colors.green,
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('انصراف'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('پرداخت با QR ثبت شد (دمو)')),
-              );
-              Navigator.pop(context);
-            },
-            child: const Text('پرداخت'),
-          ),
-        ],
-      ),
-    );
+      );
+
+      setState(() => _last = confirm);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const successGreen = Color(0xFF27AE60);
+    const Color successGreen = Color(0xFF27AE60);
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: successGreen,
-        foregroundColor: Colors.white,
-        title: const Text('اسکن QR'),
-        centerTitle: true,
-      ),
-      body: Stack(
-        children: [
-          MobileScanner(onDetect: _onDetect),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              margin: const EdgeInsets.all(12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _expectedAmount > 0
-                    ? 'مبلغ مورد انتظار: $_expectedAmount ریال'
-                    : 'QR را در کادر بگیرید',
-                style: const TextStyle(color: Colors.white),
-              ),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: successGreen,
+          foregroundColor: Colors.white,
+          title: const Text('پرداخت با QR کد'),
+          centerTitle: true,
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: MobileScanner(onDetect: _onDetect),
             ),
-          ),
-        ],
+            if (_last != null)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: SelectableText(
+                  _last!,
+                  textDirection: TextDirection.ltr,
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
