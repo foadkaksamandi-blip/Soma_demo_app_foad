@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_receive_screen.dart';
 import 'screens/generate_qr_screen.dart';
+import 'screens/scan_qr_screen.dart';
 import 'services/local_db.dart';
 
 void main() {
@@ -49,6 +50,7 @@ class MerchantApp extends StatelessWidget {
         '/': (_) => const MerchantHomePage(),
         '/qr/generate': (_) => const GenerateQrScreen(),
         '/bt/receive': (_) => const BluetoothReceiveScreen(),
+        '/qr/scan-confirm': (_) => const ScanQrScreen(), // اسکن تایید خریدار
       },
       initialRoute: '/',
     );
@@ -76,68 +78,78 @@ class _MerchantHomePageState extends State<MerchantHomePage> {
   Widget build(BuildContext context) {
     const successGreen = Color(0xFF27AE60);
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: successGreen,
-        foregroundColor: Colors.white,
-        title: const Text('اپ آفلاین سوما — فروشنده'),
-        centerTitle: true,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: successGreen.withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.account_balance_wallet, color: successGreen),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'موجودی: ${_format(balance)} ریال',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: successGreen,
+          foregroundColor: Colors.white,
+          title: const Text('اپ آفلاین سوما — فروشنده'),
+          centerTitle: true,
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: successGreen.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.account_balance_wallet, color: successGreen),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'موجودی: ${_format(balance)} ریال',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                ),
-                ElevatedButton(
-                  onPressed: _refreshBalance,
-                  style: ElevatedButton.styleFrom(backgroundColor: successGreen),
-                  child: const Text('بروزرسانی'),
-                ),
-              ],
+                  ElevatedButton(
+                    onPressed: _refreshBalance,
+                    style: ElevatedButton.styleFrom(backgroundColor: successGreen),
+                    child: const Text('بروزرسانی'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/bt/receive'),
-            icon: const Icon(Icons.bluetooth_searching),
-            label: const Text('دریافت با بلوتوث'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/qr/generate'),
-            icon: const Icon(Icons.qr_code_2),
-            label: const Text('دریافت با QR کد'),
-            style: ElevatedButton.styleFrom(backgroundColor: successGreen),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: successGreen.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/bt/receive'),
+              icon: const Icon(Icons.bluetooth_searching),
+              label: const Text('دریافت با بلوتوث'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
             ),
-            child: const Text(
-              'کد تراکنش و زمان هر پرداخت در لاگ ذخیره می‌شود.',
-              textAlign: TextAlign.center,
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/qr/generate'),
+              icon: const Icon(Icons.qr_code_2),
+              label: const Text('دریافت با QR کد (درخواست مبلغ)'),
+              style: ElevatedButton.styleFrom(backgroundColor: successGreen),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/qr/scan-confirm'),
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('اسکن تایید خریدار (پس از پرداخت)'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: successGreen.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'سناریو: فروشنده QR درخواست تولید می‌کند → خریدار اسکن و پرداخت می‌کند → خریدار QR تایید نشان می‌دهد → فروشنده اسکن و ثبت نهایی.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
