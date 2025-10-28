@@ -22,3 +22,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+# ✅ رفع خطای URI مربوط به flutter_localizations
+dependency_overrides:
+  flutter_localizations:
+    sdk: flutter
