@@ -1,8 +1,8 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import '../services/local_db.dart';
+import '../services/transaction_service.dart';
+import '../models/tx_log.dart';
 
 class BluetoothPayScreen extends StatefulWidget {
   const BluetoothPayScreen({super.key});
@@ -12,141 +12,142 @@ class BluetoothPayScreen extends StatefulWidget {
 }
 
 class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
-  final List<ScanResult> _results = [];
-  StreamSubscription<List<ScanResult>>? _scanSub;
-  bool _isScanning = false;
-
-  int _amount = 0;
-  String _source = 'یارانه';
-
-  @override
-  void initState() {
-    super.initState();
-    final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? {};
-    _amount = (args['amount'] as int?) ?? 0;
-    _source = (args['source'] as String?) ?? 'یارانه';
-    _ensureBluetoothOn();
-    _startScan();
-  }
+  bool _connected = false;
+  String? _status;
+  final TextEditingController _amountCtrl = TextEditingController();
+  String _source = 'عادی';
+  BluetoothDevice? _device;
 
   @override
   void dispose() {
-    _scanSub?.cancel();
-    FlutterBluePlus.stopScan();
+    _amountCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _ensureBluetoothOn() async {
-    final state = await FlutterBluePlus.adapterState.first;
-    if (state != BluetoothAdapterState.on && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لطفاً بلوتوث را روشن کنید')),
-      );
-    }
-  }
-
-  Future<void> _startScan() async {
-    setState(() => _isScanning = true);
-    _results.clear();
-    _scanSub?.cancel();
-    _scanSub = FlutterBluePlus.onScanResults.listen((list) {
-      setState(() {
-        _results
-          ..clear()
-          ..addAll(list);
-      });
+  void _scanAndConnect() async {
+    setState(() {
+      _status = 'در حال جستجوی دستگاه...';
     });
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
-    await FlutterBluePlus.stopScan();
-    if (mounted) setState(() => _isScanning = false);
+
+    FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
+
+    FlutterBluePlus.scanResults.listen((results) async {
+      for (var r in results) {
+        if (r.device.name.contains('SOMA')) {
+          FlutterBluePlus.stopScan();
+          _device = r.device;
+          await _device!.connect();
+          setState(() {
+            _connected = true;
+            _status = 'اتصال ایمن برقرار شد ✔️';
+          });
+          break;
+        }
+      }
+    });
   }
 
-  Future<void> _connectAndSend(BluetoothDevice device) async {
-    try {
-      await device.connect(timeout: const Duration(seconds: 8));
-      if (!mounted) return;
+  void _performPayment() {
+    final amt = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    if (amt <= 0) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('اتصال به «${device.platformName.isEmpty ? 'نامشخص' : device.platformName}» برقرار شد')),
-      );
+    LocalDB.instance.addToWallet(_source, -amt);
+    final log = TxLog.success(
+      amount: amt,
+      source: _source,
+      method: 'Bluetooth',
+      counterparty: 'merchant',
+    );
+    final payload = TransactionService.buildMerchantConfirm(log: log);
 
-      // ساخت payload
-      final payload = 'SOMA|BUYER|AMOUNT=$_amount|SOURCE=$_source|TS=${DateTime.now().millisecondsSinceEpoch}';
-      final bytes = utf8.encode(payload);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'پرداخت ${amt} ریال از کیف $_source انجام شد.\nکد: ${log.id}',
+          textDirection: TextDirection.rtl,
+        ),
+        backgroundColor: Colors.green,
+      ),
+    );
 
-      // تلاش برای نوشتن روی characteristic قابل‌نوشتن
-      final services = await device.discoverServices();
-      BluetoothCharacteristic? writable;
-      for (final s in services) {
-        for (final c in s.characteristics) {
-          if (c.properties.write || c.properties.writeWithoutResponse) {
-            writable = c;
-            break;
-          }
-        }
-        if (writable != null) break;
-      }
-
-      if (writable != null) {
-        await writable!.write(bytes, withoutResponse: writable!.properties.writeWithoutResponse);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('داده پرداخت ارسال شد')),
-        );
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Characteristic مناسب برای ارسال پیدا نشد (دمو اتصال انجام شد)')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطا در اتصال/ارسال: $e')),
-      );
-    } finally {
-      try {
-        await device.disconnect();
-      } catch (_) {}
-    }
+    setState(() => _status = payload);
   }
 
   @override
   Widget build(BuildContext context) {
-    const primaryTurquoise = Color(0xFF1ABC9C);
+    const Color primaryTurquoise = Color(0xFF1ABC9C);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('پرداخت با بلوتوث'),
-        centerTitle: true,
-        backgroundColor: primaryTurquoise,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(onPressed: _startScan, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: _isScanning
-            ? const Center(child: CircularProgressIndicator())
-            : _results.isEmpty
-                ? const Center(child: Text('هیچ دستگاهی پیدا نشد. جستجو را تکرار کنید.'))
-                : ListView.separated(
-                    itemBuilder: (ctx, i) {
-                      final r = _results[i];
-                      final d = r.device;
-                      return ListTile(
-                        title: Text(d.platformName.isEmpty ? '(ناشناس)' : d.platformName),
-                        subtitle: Text(d.remoteId.str),
-                        trailing: ElevatedButton(
-                          onPressed: () => _connectAndSend(d),
-                          child: const Text('ارسال'),
-                        ),
-                      );
-                    },
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemCount: _results.length,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: primaryTurquoise,
+          foregroundColor: Colors.white,
+          title: const Text('پرداخت با بلوتوث'),
+          centerTitle: true,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.bluetooth),
+                label: const Text('اتصال بلوتوث'),
+                onPressed: _scanAndConnect,
+              ),
+              const SizedBox(height: 12),
+              if (_status != null)
+                Text(
+                  _status!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
+                ),
+              const SizedBox(height: 24),
+              const Text('انتخاب کیف پول'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('عادی'),
+                    selected: _source == 'عادی',
+                    onSelected: (_) => setState(() => _source = 'عادی'),
                   ),
+                  ChoiceChip(
+                    label: const Text('یارانه'),
+                    selected: _source == 'یارانه',
+                    onSelected: (_) => setState(() => _source = 'یارانه'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('اضطراری'),
+                    selected: _source == 'اضطراری',
+                    onSelected: (_) => setState(() => _source = 'اضطراری'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('رمز ارز ملی'),
+                    selected: _source == 'رمز ارز ملی',
+                    onSelected: (_) => setState(() => _source = 'رمز ارز ملی'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _amountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'مبلغ پرداخت (ریال)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.send),
+                label: const Text('انجام پرداخت'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                onPressed: _connected ? _performPayment : null,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
