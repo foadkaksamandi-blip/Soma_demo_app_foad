@@ -3,8 +3,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 
 import 'screens/bluetooth_pay_screen.dart';
-import 'screens/scan_qr_screen.dart';
+import 'screens/qr_pay_screen.dart';
 import 'services/local_db.dart';
+import 'services/transaction_service.dart';
+import 'models/tx_log.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +41,7 @@ class BuyerApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'اپ خریدار سوما',
+      title: 'اپ آفلاین سوما — خریدار',
       theme: theme,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
@@ -51,7 +53,7 @@ class BuyerApp extends StatelessWidget {
       routes: {
         '/': (_) => const BuyerHomePage(),
         '/pay/bluetooth': (_) => const BluetoothPayScreen(),
-        '/pay/qr': (_) => ScanQrScreen(), // ← فقط اینجا const حذف شد
+        '/pay/qr': (_) => const QrPayScreen(),
       },
       initialRoute: '/',
     );
@@ -68,8 +70,8 @@ class BuyerHomePage extends StatefulWidget {
 class _BuyerHomePageState extends State<BuyerHomePage> {
   int balance = LocalDB.instance.buyerBalance;
   final TextEditingController amountCtrl = TextEditingController();
+  String selectedWallet = 'عادی';
   final _nf = NumberFormat.decimalPattern('fa');
-  String _source = 'یارانه';
 
   @override
   void initState() {
@@ -77,159 +79,118 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
     balance = LocalDB.instance.buyerBalance;
   }
 
-  @override
-  void dispose() {
-    amountCtrl.dispose();
-    super.dispose();
+  void _refreshBalance() {
+    setState(() => balance = LocalDB.instance.buyerBalance);
   }
 
-  String _fmt(int rials) => _nf.format(rials);
-
-  void _refreshBalance() => setState(() => balance = LocalDB.instance.buyerBalance);
-
-  void _showSnack(String msg, {bool success = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: success ? const Color(0xFF27AE60) : Colors.black87),
-    );
-  }
+  String _format(int rials) => _nf.format(rials);
 
   @override
   Widget build(BuildContext context) {
-    const primaryTurquoise = Color(0xFF1ABC9C);
+    const Color primaryTurquoise = Color(0xFF1ABC9C);
+    const Color successGreen = Color(0xFF27AE60);
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: primaryTurquoise,
-        foregroundColor: Colors.white,
-        title: const Text('اپ آفلاین سوما'),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: primaryTurquoise,
+          foregroundColor: Colors.white,
+          title: const Text('اپ آفلاین سوما — خریدار'),
+          centerTitle: true,
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Text('کیف پول', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryTurquoise.withOpacity(0.25)),
+                border: Border.all(color: primaryTurquoise.withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.account_balance_wallet, color: Color(0xFF27AE60)),
+                  const Icon(Icons.account_balance_wallet, color: successGreen),
                   const SizedBox(width: 8),
-                  Text('${_fmt(balance)} ریال', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                  const Spacer(),
+                  Expanded(
+                    child: Text(
+                      'موجودی: ${_format(balance)} ریال',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                    ),
+                  ),
                   ElevatedButton(
                     onPressed: _refreshBalance,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryTurquoise,
-                      foregroundColor: Colors.white,
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: successGreen),
                     child: const Text('بروزرسانی'),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            Text('منبع پرداخت', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ChoiceChip(label: const Text('یارانه'), selected: _source == 'یارانه', onSelected: (_) => setState(() => _source = 'یارانه')),
-                ChoiceChip(label: const Text('اضطراری'), selected: _source == 'اضطراری', onSelected: (_) => setState(() => _source = 'اضطراری')),
-                ChoiceChip(label: const Text('رمز ارز ملی'), selected: _source == 'رمز ارز ملی', onSelected: (_) => setState(() => _source = 'رمز ارز ملی')),
+                ElevatedButton.icon(
+                  onPressed: () => setState(() => selectedWallet = 'یارانه'),
+                  icon: const Icon(Icons.wallet),
+                  label: const Text('یارانه'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => setState(() => selectedWallet = 'اضطراری'),
+                  icon: const Icon(Icons.safety_check),
+                  label: const Text('اضطراری'),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => setState(() => selectedWallet = 'رمز ارز ملی'),
+                  icon: const Icon(Icons.currency_bitcoin),
+                  label: const Text('رمز ارز ملی'),
+                ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text('مبلغ خرید', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: amountCtrl,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
-                hintText: 'مثلاً ۵۰۰٬۰۰۰ ریال',
+                labelText: 'مبلغ خرید (ریال)',
                 border: OutlineInputBorder(),
-                isDense: true,
               ),
             ),
-            const SizedBox(height: 16),
-            Text('نحوه پرداخت', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: primaryTurquoise)),
-            const SizedBox(height: 8),
-            _PaymentCard(
-              icon: Icons.bluetooth,
-              color: primaryTurquoise,
-              title: 'پرداخت با بلوتوث',
-              onTap: () {
-                final amt = int.tryParse(amountCtrl.text.replaceAll(',', '').replaceAll('٬', '')) ?? 0;
-                Navigator.pushNamed(context, '/pay/bluetooth', arguments: {'amount': amt, 'source': _source});
-              },
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/pay/bluetooth'),
+              icon: const Icon(Icons.bluetooth),
+              label: const Text('پرداخت با بلوتوث'),
+              style: ElevatedButton.styleFrom(backgroundColor: primaryTurquoise),
             ),
             const SizedBox(height: 8),
-            _PaymentCard(
-              icon: Icons.qr_code_scanner,
-              color: const Color(0xFF27AE60),
-              title: 'پرداخت با اسکن QR',
-              onTap: () {
-                final amt = int.tryParse(amountCtrl.text.replaceAll(',', '').replaceAll('٬', '')) ?? 0;
-                Navigator.pushNamed(context, '/pay/qr', arguments: {'expectedAmount': amt, 'source': _source});
-              },
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/pay/qr'),
+              icon: const Icon(Icons.qr_code_2),
+              label: const Text('پرداخت با QR کد'),
+              style: ElevatedButton.styleFrom(backgroundColor: successGreen),
             ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: primaryTurquoise.withOpacity(0.08), borderRadius: BorderRadius.circular(10)),
-              child: const Text('واقعی: تولید و اسکن QR برای تست بلوتوث و جفت‌کردن دستگاه‌ها.'),
+            const SizedBox(height: 20),
+            Center(
+              child: Text(
+                'کیف پول فعال: $selectedWallet',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF27AE60),
-        foregroundColor: Colors.white,
-        onPressed: () {
-          LocalDB.instance.addBuyerBalance(100000);
-          _showSnack('۱۰۰٬۰۰۰ ریال به موجودی آزمایشی اضافه شد.', success: true);
-          _refreshBalance();
-        },
-        label: const Text('افزایش موجودی آزمایشی'),
-        icon: const Icon(Icons.add_card),
-      ),
-    );
-  }
-}
-
-class _PaymentCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _PaymentCard({required this.icon, required this.title, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(border: Border.all(color: color.withOpacity(0.25)), borderRadius: BorderRadius.circular(12)),
-          child: Row(
-            children: [
-              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
-              const SizedBox(width: 12),
-              Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-              const Icon(Icons.chevron_left),
-            ],
-          ),
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: successGreen,
+          onPressed: () {
+            LocalDB.instance.addBuyerBalance(100000);
+            _refreshBalance();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('۱۰۰٬۰۰۰ ریال به موجودی افزوده شد.')),
+            );
+          },
+          label: const Text('افزایش موجودی آزمایشی'),
+          icon: const Icon(Icons.add_card),
         ),
       ),
     );
