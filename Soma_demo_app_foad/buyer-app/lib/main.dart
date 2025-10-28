@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 
 // صفحات
 import 'screens/bluetooth_pay_screen.dart';
-import 'screens/scan_qr_screen.dart'; // ⬅️ جایگزینِ qr_pay_screen.dart
+import 'screens/scan_qr_screen.dart';
 
 // سرویس‌های داخلی
 import 'services/local_db.dart';
@@ -19,9 +19,9 @@ class BuyerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Colors.teal;      // رنگ اصلی
-    const success = Colors.green;     // پیام/دکمه موفق
-    const textDark = Colors.black87;  // رنگ متن‌های اصلی
+    const primary = Colors.teal;
+    const success = Colors.green;
+    const textDark = Colors.black87;
 
     final theme = ThemeData(
       useMaterial3: true,
@@ -47,7 +47,7 @@ class BuyerApp extends StatelessWidget {
       routes: {
         '/': (_) => const BuyerHomePage(),
         '/pay/bluetooth': (_) => const BluetoothPayScreen(),
-        '/pay/qr': (_) => const QrPayScreen(), // ⬅️ کلاس در فایل scan_qr_screen.dart
+        '/scan/qr': (_) => const QrPayScreen(), // 🔹 مسیر جدید و منظم‌تر
       },
       initialRoute: '/',
       theme: theme,
@@ -185,16 +185,11 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
               icon: Icons.qr_code_2,
               title: 'پرداخت با اسکن QR',
               color: success,
-              onTap: () => Navigator.pushNamed(context, '/pay/qr', arguments: {
-                // اگر صفحهٔ اسکن شما از آرگومان استفاده می‌کند
-                'expectedAmount': int.tryParse(amountCtrl.text.trim()) ?? 0,
-                'source': 'کیف‌پول',
-              }),
+              onTap: () => Navigator.pushNamed(context, '/scan/qr'),
             ),
 
             const SizedBox(height: 24),
 
-            // راهنمای تست
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -202,7 +197,7 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Text(
-                'واقعی: تولید و اسکن QR برای تست بلوتوث و جفت‌کردن دستگاه‌ها.',
+                'برای تست واقعی بلوتوث و QR، اجازه‌ها را بدهید و دستگاه‌ها را جفت کنید.',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -210,7 +205,6 @@ class _BuyerHomePageState extends State<BuyerHomePage> {
         ),
       ),
 
-      // افزایش موجودی آزمایشی
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: success,
         foregroundColor: Colors.white,
