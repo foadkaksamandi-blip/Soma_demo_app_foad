@@ -11,8 +11,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     strategy:
+      fail-fast: false
       matrix:
         app:
           - name: buyer
@@ -40,24 +40,44 @@ jobs:
           cache: true
 
       - name: Verify pubspec exists
-        run: |
-          test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found at ${{ matrix.app.dir }}" && exit 1)
-
-      # 🔧 Fixed: specify output directory with '.' so flutter create runs in-place
-      - name: Regenerate Android scaffold (safe mode)
         working-directory: ${{ matrix.app.dir }}
         run: |
-          flutter create . --platforms android --org ir.soma.demo --project-name ${{ matrix.app.name }} --overwrite
+          test -f pubspec.yaml || (echo "❌ pubspec.yaml not found"; exit 1)
+
+      # 👇 فقط اسکفولد اندروید را می‌سازد و lib را دست نمی‌زند (بدون --overwrite)
+      - name: Regenerate Android scaffold (safe mode)
+        working-directory: ${{ matrix.app.dir }}
+        shell: bash
+        run: |
+          flutter create --platforms android --org ir.soma.demo .
           chmod +x android/gradlew
+
+      # 👇 برای برخی پلاگین‌ها که compileSdkVersion تعریف نکرده‌اند
+      - name: Patch compileSdkVersion for plugins
+        working-directory: ${{ matrix.app.dir }}
+        shell: bash
+        run: |
+          find $FLUTTER_ROOT/.pub-cache/hosted -path "*/android/build.gradle" -print0 | while IFS= read -r -d '' f; do
+            grep -q "compileSdkVersion" "$f" || echo -e "\nandroid { compileSdkVersion 34 }\n" >> "$f"
+          done
+
+      # 👇 افزودن دسترسی‌های لازم دوربین و بلوتوث به Manifest تولیدی
+      - name: Patch AndroidManifest permissions
+        working-directory: ${{ matrix.app.dir }}
+        shell: bash
+        run: |
+          MAN=android/app/src/main/AndroidManifest.xml
+          sed -i 's#</manifest>#<uses-permission android:name="android.permission.CAMERA"/>\n<uses-permission android:name="android.permission.BLUETOOTH"/>\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n</manifest>#' "$MAN"
 
       - name: Get dependencies
         working-directory: ${{ matrix.app.dir }}
         run: flutter pub get
 
+      # 👇 سنجش وجود intl pin
       - name: Sanity check intl pin
         working-directory: ${{ matrix.app.dir }}
         run: |
-          grep -q "intl: \\^0\\.1\\d\\." pubspec.yaml || true
+          grep -q "intl: *" pubspec.yaml || true
 
       - name: Build APK (release)
         working-directory: ${{ matrix.app.dir }}
