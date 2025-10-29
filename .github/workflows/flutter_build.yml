@@ -43,10 +43,11 @@ jobs:
         run: |
           test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found at ${{ matrix.app.dir }}" && exit 1)
 
+      # 🔧 Fixed: specify output directory with '.' so flutter create runs in-place
       - name: Regenerate Android scaffold (safe mode)
         working-directory: ${{ matrix.app.dir }}
         run: |
-          flutter create --platforms android --org ir.soma.demo --project-name ${{ matrix.app.name }} --overwrite
+          flutter create . --platforms android --org ir.soma.demo --project-name ${{ matrix.app.name }} --overwrite
           chmod +x android/gradlew
 
       - name: Get dependencies
@@ -55,14 +56,8 @@ jobs:
 
       - name: Sanity check intl pin
         working-directory: ${{ matrix.app.dir }}
-        run: grep -q "intl" pubspec.yaml || true
-
-      # 🔹 اضافه شده برای رفع خطای flutter_blue_plus / compileSdkVersion
-      - name: Patch compileSdkVersion for plugins
         run: |
-          find ${{ matrix.app.dir }}/android -type f -name build.gradle | while read f; do
-            grep -q "compileSdkVersion" "$f" || echo "android { compileSdkVersion 34 }" >> "$f"
-          done
+          grep -q "intl: \\^0\\.1\\d\\." pubspec.yaml || true
 
       - name: Build APK (release)
         working-directory: ${{ matrix.app.dir }}
@@ -82,5 +77,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app.name }}.apk
-          path: artifacts/${{ matrix.app.name }}/${{ matrix.app.artifact }}
+          path: artifacts/${{ matrix.app.name }}/*.apk
           if-no-files-found: error
