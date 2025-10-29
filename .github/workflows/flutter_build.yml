@@ -1,14 +1,26 @@
-# .github/workflows/flutter_build.yml
 name: Build Buyer & Merchant APK (release)
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    paths:
+      - "Soma_demo_app_foad/buyer-app/**"
+      - "Soma_demo_app_foad/merchant-app/**"
+      - ".github/workflows/flutter.yml"
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        app:
+          - name: buyer
+            dir: Soma_demo_app_foad/buyer-app
+            artifact: buyer-app-release.apk
+          - name: merchant
+            dir: Soma_demo_app_foad/merchant-app
+            artifact: merchant-app-release.apk
 
     steps:
       - name: Checkout
@@ -20,76 +32,53 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Flutter
+      - name: Setup Flutter (stable 3.24.x)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.x"
-          channel: "stable"
+          flutter-version: "3.24.3"
+          channel: stable
           cache: true
 
-      # مسیرها را به‌صورت مقاوم کشف می‌کنیم (buyer/merchant با نام‌های مختلف)
-      - name: Detect app directories
-        id: detect
-        shell: bash
+      - name: Verify pubspec exists
         run: |
-          set -e
-          # کاندیداهای ممکن برای نام پوشه‌ها
-          CANDS_BUYER="buyer buyer-app buyer_app buyer-apps/buyer buyer_app/buyer"
-          CANDS_MERCH="merchant merchant-app merchant_app merchant-apps/merchant merchant_app/merchant"
+          test -f "${{ matrix.app.dir }}/pubspec.yaml" || \
+            (echo "❌ pubspec.yaml not found at ${{ matrix.app.dir }}"; exit 1)
 
-          find_pubspec () {
-            for d in $1; do
-              if [ -f "$d/pubspec.yaml" ]; then
-                echo "$d"
-                return 0
-              fi
-            done
-            echo ""
-            return 0
-          }
-
-          BUYER_DIR=$(find_pubspec "$CANDS_BUYER")
-          MERCH_DIR=$(find_pubspec "$CANDS_MERCH")
-
-          # اگر فقط در ریشه pubspec داشتیم
-          [ -z "$BUYER_DIR" ] && [ -f pubspec.yaml ] && BUYER_DIR="."
-          [ -z "$MERCH_DIR" ] && [ -f pubspec.yaml ] && MERCH_DIR="."
-
-          if [ -z "$BUYER_DIR" ]; then
-            echo "❌ pubspec.yaml for BUYER not found"; exit 1
-          fi
-          if [ -z "$MERCH_DIR" ]; then
-            echo "❌ pubspec.yaml for MERCHANT not found"; exit 1
-          fi
-
-          echo "BUYER_DIR=$BUYER_DIR"   >> $GITHUB_OUTPUT
-          echo "MERCH_DIR=$MERCH_DIR"   >> $GITHUB_OUTPUT
-          echo "✅ Buyer: $BUYER_DIR | Merchant: $MERCH_DIR"
-
-      # تابع کمکی برای هر اپ: pub get → ایجاد اسکفولد اندروید در صورت حذف بودن → بیلد
-      - name: Build BUYER APK (release)
-        working-directory: ${{ steps.detect.outputs.BUYER_DIR }}
+      # چون فولدر android حذف شده، برای هر اپ فقط اندروید را Regen می‌کنیم
+      - name: Regenerate Android scaffold
+        working-directory: ${{ matrix.app.dir }}
         run: |
-          flutter pub get
-          # اگر فولدر android حذف شده، فقط اندروید را بساز
-          [ -d android ] || flutter create --platforms=android .
+          flutter create . --platforms android --org ir.soma.demo --project-name ${{ matrix.app.name }} --overwrite
+          chmod +x android/gradlew
+
+      - name: Get dependencies
+        working-directory: ${{ matrix.app.dir }}
+        run: flutter pub get
+
+      # برای جلوگیری از خطای intl با flutter_localizations
+      - name: Sanity check intl pin
+        working-directory: ${{ matrix.app.dir }}
+        run: |
+          grep -q "intl: \\^0\\.19\\.0" pubspec.yaml || true
+
+      - name: Build APK (release)
+        working-directory: ${{ matrix.app.dir }}
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
+        run: |
           flutter build apk --release
+          ls -lah build/app/outputs/flutter-apk
 
-      - name: Upload BUYER APK
+      - name: Prepare artifact
+        working-directory: ${{ matrix.app.dir }}
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/artifacts/${{ matrix.app.name }}
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             $GITHUB_WORKSPACE/artifacts/${{ matrix.app.name }}/${{ matrix.app.artifact }}
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: buyer-apk
-          path: ${{ steps.detect.outputs.BUYER_DIR }}/build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Build MERCHANT APK (release)
-        working-directory: ${{ steps.detect.outputs.MERCH_DIR }}
-        run: |
-          flutter pub get
-          [ -d android ] || flutter create --platforms=android .
-          flutter build apk --release
-
-      - name: Upload MERCHANT APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: merchant-apk
-          path: ${{ steps.detect.outputs.MERCH_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          name: ${{ matrix.app.name }}-apk
+          path: artifacts/${{ matrix.app.name }}/*.apk
+          if-no-files-found: error
