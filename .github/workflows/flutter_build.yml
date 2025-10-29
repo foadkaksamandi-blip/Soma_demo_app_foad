@@ -11,17 +11,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        include:
+        app:
           - name: buyer
             dir: Soma_demo_app_foad/buyer-app
             artifact: buyer-app-release.apk
-            pkg: buyer_app
           - name: merchant
             dir: Soma_demo_app_foad/merchant-app
             artifact: merchant-app-release.apk
-            pkg: merchant_app
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,27 +41,31 @@ jobs:
 
       - name: Verify pubspec exists
         run: |
-          test -f "${{ matrix.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found at ${{ matrix.dir }}" && exit 1)
+          test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found at ${{ matrix.app.dir }}" && exit 1)
 
-      # 🔧 Regen with explicit project-name to avoid dash issue
       - name: Regenerate Android scaffold (safe mode)
-        working-directory: ${{ matrix.dir }}
+        working-directory: ${{ matrix.app.dir }}
         run: |
-          flutter create --platforms android --org ir.soma.demo --project-name ${{ matrix.pkg }} .
+          flutter create --platforms android --org ir.soma.demo --project-name ${{ matrix.app.name }} --overwrite
           chmod +x android/gradlew
 
       - name: Get dependencies
-        working-directory: ${{ matrix.dir }}
+        working-directory: ${{ matrix.app.dir }}
         run: flutter pub get
 
-      # sanity check to ensure intl pin exists if using it (non-blocking if not found)
       - name: Sanity check intl pin
-        working-directory: ${{ matrix.dir }}
+        working-directory: ${{ matrix.app.dir }}
+        run: grep -q "intl" pubspec.yaml || true
+
+      # 🔹 اضافه شده برای رفع خطای flutter_blue_plus / compileSdkVersion
+      - name: Patch compileSdkVersion for plugins
         run: |
-          (grep -q "intl: *\\^0\\..*\\>" pubspec.yaml && echo "intl pinned") || true
+          find ${{ matrix.app.dir }}/android -type f -name build.gradle | while read f; do
+            grep -q "compileSdkVersion" "$f" || echo "android { compileSdkVersion 34 }" >> "$f"
+          done
 
       - name: Build APK (release)
-        working-directory: ${{ matrix.dir }}
+        working-directory: ${{ matrix.app.dir }}
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
         run: |
@@ -69,15 +73,14 @@ jobs:
           ls -lah build/app/outputs/flutter-apk
 
       - name: Prepare artifact
-        working-directory: ${{ matrix.dir }}
+        working-directory: ${{ matrix.app.dir }}
         run: |
-          mkdir -p $GITHUB_WORKSPACE/artifacts/${{ matrix.name }}
-          cp build/app/outputs/flutter-apk/app-release.apk \
-             $GITHUB_WORKSPACE/artifacts/${{ matrix.name }}/${{ matrix.artifact }}
+          mkdir -p $GITHUB_WORKSPACE/artifacts/${{ matrix.app.name }}
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/artifacts/${{ matrix.app.name }}/${{ matrix.app.artifact }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.name }}.apk
-          path: artifacts/${{ matrix.name }}/**/*.apk
+          name: ${{ matrix.app.name }}.apk
+          path: artifacts/${{ matrix.app.name }}/${{ matrix.app.artifact }}
           if-no-files-found: error
