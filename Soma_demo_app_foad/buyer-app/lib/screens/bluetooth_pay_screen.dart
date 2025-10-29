@@ -5,7 +5,7 @@ import '../services/transaction_service.dart';
 
 class BluetoothPayScreen extends StatefulWidget {
   final double amount;
-  final String source;
+  final String source;            // balance | subsidy | emergency | crypto
   final TransactionService tx;
 
   const BluetoothPayScreen({
@@ -81,19 +81,29 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
   }
 
   Future<void> _pay() async {
-    // در این نسخه، پس از اتصال، تراکنش محلی اعمال می‌شود.
-    final ok = widget.tx.processBluetoothPayment(widget.amount);
+    // نسخه دمو: پس از اتصال، تراکنش محلی اعمال و رسید ثبت می‌شود.
+    final ok = widget.tx.applyPayment(
+      amount: widget.amount,
+      method: 'bluetooth',
+      source: widget.source,
+    );
+
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('موجودی کافی نیست')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('موجودی کافی نیست')));
       return;
     }
-    if (mounted) {
+
+    // نمایش رسید مختصر
+    final r = widget.tx.getLastReceipt();
+    if (mounted && r != null) {
+      final ts = r.timestamp;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: _success,
-          content: Text('تراکنش موفق — ${widget.amount.toInt()} ریال پرداخت شد'),
+          content: Text(
+            'تراکنش موفق: ${r.amount.toInt()} ریال | کد: ${r.id.substring(0,8)} | ${ts.hour.toString().padLeft(2,'0')}:${ts.minute.toString().padLeft(2,'0')}',
+          ),
         ),
       );
       Navigator.pop(context, true);
@@ -102,6 +112,8 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final amountText = widget.amount.toInt().toString();
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -116,7 +128,7 @@ class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
             children: [
               Row(
                 children: [
-                  Text('مبلغ: ${widget.amount.toInt()} ریال',
+                  Text('مبلغ: $amountText ریال',
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                   const Spacer(),
                   ElevatedButton.icon(
