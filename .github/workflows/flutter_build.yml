@@ -44,15 +44,16 @@ jobs:
         run: |
           test -f pubspec.yaml || (echo "❌ pubspec.yaml not found"; exit 1)
 
-      # 👇 فقط اسکفولد اندروید را می‌سازد و lib را دست نمی‌زند (بدون --overwrite)
+      # ✅ اصلاح کامل برای حذف خطای package name
       - name: Regenerate Android scaffold (safe mode)
         working-directory: ${{ matrix.app.dir }}
         shell: bash
         run: |
-          flutter create --platforms android --org ir.soma.demo .
+          app_name=$(basename "${{ matrix.app.dir }}" | tr '-' '_')
+          flutter create --platforms android --org ir.soma.demo --project-name "$app_name" .
           chmod +x android/gradlew
 
-      # 👇 برای برخی پلاگین‌ها که compileSdkVersion تعریف نکرده‌اند
+      # ✅ افزودن compileSdkVersion برای پلاگین‌هایی که تعریف نکرده‌اند
       - name: Patch compileSdkVersion for plugins
         working-directory: ${{ matrix.app.dir }}
         shell: bash
@@ -61,19 +62,18 @@ jobs:
             grep -q "compileSdkVersion" "$f" || echo -e "\nandroid { compileSdkVersion 34 }\n" >> "$f"
           done
 
-      # 👇 افزودن دسترسی‌های لازم دوربین و بلوتوث به Manifest تولیدی
+      # ✅ افزودن مجوزهای لازم دوربین و بلوتوث
       - name: Patch AndroidManifest permissions
         working-directory: ${{ matrix.app.dir }}
         shell: bash
         run: |
           MAN=android/app/src/main/AndroidManifest.xml
-          sed -i 's#</manifest>#<uses-permission android:name="android.permission.CAMERA"/>\n<uses-permission android:name="android.permission.BLUETOOTH"/>\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n</manifest>#' "$MAN"
+          sed -i 's#</manifest>#<uses-permission android:name="android.permission.CAMERA"/>\n<uses-permission android:name="android.permission.BLUETOOTH"/>\n<uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n<uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n<uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n</manifest>#' "$MAN"
 
       - name: Get dependencies
         working-directory: ${{ matrix.app.dir }}
         run: flutter pub get
 
-      # 👇 سنجش وجود intl pin
       - name: Sanity check intl pin
         working-directory: ${{ matrix.app.dir }}
         run: |
