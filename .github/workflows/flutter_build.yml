@@ -44,7 +44,6 @@ jobs:
         run: |
           test -f pubspec.yaml || (echo "❌ pubspec.yaml not found"; exit 1)
 
-      # ✅ اصلاح کامل برای حذف خطای package name
       - name: Regenerate Android scaffold (safe mode)
         working-directory: ${{ matrix.app.dir }}
         shell: bash
@@ -53,16 +52,21 @@ jobs:
           flutter create --platforms android --org ir.soma.demo --project-name "$app_name" .
           chmod +x android/gradlew
 
-      # ✅ افزودن compileSdkVersion برای پلاگین‌هایی که تعریف نکرده‌اند
+      # ✅ مسیر جدید کش فلاتر برای نسخه‌های جدید Runner
       - name: Patch compileSdkVersion for plugins
         working-directory: ${{ matrix.app.dir }}
         shell: bash
         run: |
-          find $FLUTTER_ROOT/.pub-cache/hosted -path "*/android/build.gradle" -print0 | while IFS= read -r -d '' f; do
-            grep -q "compileSdkVersion" "$f" || echo -e "\nandroid { compileSdkVersion 34 }\n" >> "$f"
-          done
+          CACHE_DIR="$HOME/.pub-cache/hosted"
+          echo "Scanning Flutter cache in: $CACHE_DIR"
+          if [ -d "$CACHE_DIR" ]; then
+            find "$CACHE_DIR" -path "*/android/build.gradle" -print0 | while IFS= read -r -d '' f; do
+              grep -q "compileSdkVersion" "$f" || echo -e "\nandroid { compileSdkVersion 34 }\n" >> "$f"
+            done
+          else
+            echo "⚠️ Flutter cache directory not found (no plugins yet). Skipping patch."
+          fi
 
-      # ✅ افزودن مجوزهای لازم دوربین و بلوتوث
       - name: Patch AndroidManifest permissions
         working-directory: ${{ matrix.app.dir }}
         shell: bash
