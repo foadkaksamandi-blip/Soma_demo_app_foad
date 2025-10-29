@@ -1,7 +1,6 @@
 name: buyer_app
-description: SOMA Offline Demo – Buyer app
+description: SOMA offline buyer demo
 publish_to: "none"
-version: 1.0.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -11,21 +10,26 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  intl: ^0.20.2
-  # 👇 نسخه‌ی سازگار با Kotlin 1.9.x (برای CI فعلی)
-  mobile_scanner: 3.2.0
+  cupertino_icons: ^1.0.8
+
+  # --- سازگاری با flutter_localizations ---
+  intl: ^0.19.0
+
+  # اسکن QR (نسخه سازگار با Kotlin فعلی runner)
+  mobile_scanner: ^5.1.1
+
+  # مجوزها
+  permission_handler: ^11.3.1
+
+  # (در صورت استفاده) تولید QR لوکال
   qr_flutter: ^4.1.0
-  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
-
-# برای اطمینان از حل درست وابستگی‌ها
-dependency_overrides:
-  flutter_localizations:
-    sdk: flutter
-  mobile_scanner: 3.2.0
+  assets:
+    - assets/
