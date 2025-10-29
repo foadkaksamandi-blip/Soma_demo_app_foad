@@ -1,119 +1,125 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import '../services/transaction_service.dart';
+import 'package:qr_code_scanner/qr_code_scanner.dart';
+import '../services/local_db.dart';
+import '../services/transaction_history.dart';
 
-class ScanQrScreen extends StatefulWidget {
-  final double expectedAmount;   // مبلغ ورودی کاربر برای تطبیق
-  final String source;           // balance | subsidy | emergency | crypto
-  final TransactionService tx;
-
-  const ScanQrScreen({
-    super.key,
-    required this.expectedAmount,
-    required this.source,
-    required this.tx,
-  });
+class QrScreen extends StatefulWidget {
+  const QrScreen({super.key});
 
   @override
-  State<ScanQrScreen> createState() => _ScanQrScreenState();
+  State<QrScreen> createState() => _QrScreenState();
 }
 
-class _ScanQrScreenState extends State<ScanQrScreen> {
-  bool _done = false;
+class _QrScreenState extends State<QrScreen> {
+  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
+  QRViewController? controller;
+  bool handled = false;
 
-  Color get _primary => const Color(0xFF1ABC9C);
-  Color get _success => const Color(0xFF27AE60);
+  @override
+  void reassemble() {
+    super.reassemble();
+    // برای hot-reload روی اندروید/ios
+    controller?.pauseCamera();
+    controller?.resumeCamera();
+  }
 
-  void _onDetect(BarcodeCapture capture) {
-    if (_done) return;
-    final code = capture.barcodes.firstOrNull?.rawValue;
-    if (code == null) return;
+  @override
+  void dispose() {
+    controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleScan(String data) async {
+    if (handled) return;
+    handled = true;
 
     try {
-      final data = jsonDecode(code);
-      final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-      if (amount <= 0) {
-        throw Exception('invalid amount');
-      }
+      final Map<String, dynamic> payload = jsonDecode(data);
+      final String type = payload['type']?.toString() ?? '';
+      final int amount = (payload['amount'] is int)
+          ? payload['amount'] as int
+          : int.tryParse('${payload['amount']}') ?? 0;
 
-      // تطبیق با مبلغ واردشده (در صورت واردشدن)
-      if (widget.expectedAmount > 0 && amount != widget.expectedAmount) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('مبلغ QR با مبلغ ورودی همخوانی ندارد')),
-        );
+      if (type != 'invoice' || amount <= 0) {
+        _show('QR نامعتبر است.');
+        Navigator.pop(context);
         return;
       }
 
-      final ok = widget.tx.applyPayment(
-        amount: amount,
+      // کسر موجودی واقعی از کیفِ انتخابی کاربر (پیش‌فرض حساب)
+      if (LocalDB.instance.buyerBalance < amount) {
+        _show('موجودی کافی نیست.');
+        Navigator.pop(context);
+        return;
+      }
+
+      LocalDB.instance.addBuyerBalance(-amount); // کسر
+      await TransactionHistoryService().add(
         method: 'qr',
-        source: widget.source,
+        amount: amount,
+        wallet: 'account', // اگر از صفحه اصلی wallet انتخاب می‌فرستی، می‌توانی از arguments بخوانی.
       );
-      if (!ok) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('موجودی کافی نیست')));
-        return;
-      }
 
-      setState(() => _done = true);
+      // نمایش QR تأییدی برای اسکن فروشنده (رسید پرداخت)
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('پرداخت موفق'),
+          content: Text('مبلغ $amount ریال با QR پرداخت شد.\n'
+              'اکنون فروشنده می‌تواند رسید را اسکن کند (در صفحهٔ دریافت خود).'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('باشه'),
+            )
+          ],
+        ),
+      );
 
-      final r = widget.tx.getLastReceipt();
-      if (r != null) {
-        final ts = r.timestamp;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: _success,
-            content: Text(
-              'پرداخت موفق: ${r.amount.toInt()} ریال | کد: ${r.id.substring(0,8)} | ${ts.hour.toString().padLeft(2,'0')}:${ts.minute.toString().padLeft(2,'0')}',
-            ),
-          ),
-        );
-      }
-      Navigator.pop(context, true);
+      Navigator.pop(context, {'paid': true, 'amount': amount});
     } catch (_) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('QR نامعتبر')));
+      _show('خواندن QR نامعتبر است.');
+      Navigator.pop(context);
     }
+  }
+
+  void _show(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: _primary,
-          foregroundColor: Colors.white,
-          title: const Text('پرداخت با QR — اسکن'),
-        ),
-        body: Stack(
-          children: [
-            MobileScanner(
-              onDetect: _onDetect,
-              controller: MobileScannerController(
-                facing: CameraFacing.back,
-                detectionSpeed: DetectionSpeed.noDuplicates,
-                torchEnabled: false,
+    return Scaffold(
+      appBar: AppBar(title: const Text('اسکن QR')),
+      body: Stack(
+        children: [
+          QRView(
+            key: qrKey,
+            onQRViewCreated: (c) {
+              controller = c;
+              c.scannedDataStream.listen((scanData) {
+                final code = scanData.code;
+                if (code != null) _handleScan(code);
+              });
+            },
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  await controller?.toggleFlash();
+                  setState(() {});
+                },
+                icon: const Icon(Icons.flash_on),
+                label: const Text('فلش'),
               ),
             ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.45),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  'دوربین را روی QR فروشنده بگیرید',
-                  style: TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
