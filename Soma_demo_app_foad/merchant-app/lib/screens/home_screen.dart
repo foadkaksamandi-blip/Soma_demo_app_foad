@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../services/transaction_service.dart';
-import 'receive_bluetooth_screen.dart';
+import 'bluetooth_receive_screen.dart';
 import 'generate_qr_screen.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
@@ -16,16 +17,99 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   final _nf = NumberFormat.decimalPattern('fa');
   final TransactionService _tx = TransactionService();
 
-  String _fmt(double v) => _nf.format(v.round());
+  // برای برچسب‌گذاری رسید (اختیاری سمت فروشنده)
+  String _source = 'balance';
 
-  Color get _primary => const Color(0xFF27AE60);
+  Color get _green => const Color(0xFF27AE60);
   Color get _turquoise => const Color(0xFF1ABC9C);
   Color get _textDark => const Color(0xFF0B2545);
+
+  String _fmt(double v) => _nf.format(v.round());
 
   @override
   void dispose() {
     _amountCtrl.dispose();
     super.dispose();
+  }
+
+  double _readAmount() {
+    final raw = _amountCtrl.text.replaceAll(RegExp(r'[^\d]'), '');
+    return double.tryParse(raw) ?? 0;
+  }
+
+  Widget _sourceChips() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ChoiceChip(
+          selected: _source == 'balance',
+          label: const Text('موجودی حساب'),
+          onSelected: (_) => setState(() => _source = 'balance'),
+        ),
+        ChoiceChip(
+          selected: _source == 'subsidy',
+          label: const Text('موجودی یارانه'),
+          onSelected: (_) => setState(() => _source = 'subsidy'),
+        ),
+        ChoiceChip(
+          selected: _source == 'emergency',
+          label: const Text('موجودی اضطراری ملی'),
+          onSelected: (_) => setState(() => _source = 'emergency'),
+        ),
+        ChoiceChip(
+          selected: _source == 'crypto',
+          label: const Text('موجودی کیف پول رمز ارز ملی'),
+          onSelected: (_) => setState(() => _source = 'crypto'),
+        ),
+      ],
+    );
+  }
+
+  Widget _receiptBox() {
+    final r = _tx.getLastReceipt();
+    if (r == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _green.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _green.withOpacity(0.2)),
+        ),
+        child: const Text('هنوز دریافتی ثبت نشده است.'),
+      );
+    }
+    final t = r.timestamp;
+    final hh = t.hour.toString().padLeft(2, '0');
+    final mm = t.minute.toString().padLeft(2, '0');
+    final dd = '${t.year}/${t.month.toString().padLeft(2, '0')}/${t.day.toString().padLeft(2, '0')}';
+    final methodFa = r.method == 'bluetooth' ? 'بلوتوث' : 'QR';
+    final sourceFa = {
+      'balance': 'موجودی حساب',
+      'subsidy': 'موجودی یارانه',
+      'emergency': 'موجودی اضطراری ملی',
+      'crypto': 'موجودی کیف پول رمز ارز ملی',
+    }[r.source]!;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _turquoise.withOpacity(0.25)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('رسید آخرین دریافت', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text('کد: ${r.id.substring(0, 12)}'),
+          Text('مبلغ: ${_fmt(r.amount)} ریال'),
+          Text('روش: $methodFa'),
+          Text('منبع: $sourceFa'),
+          Text('زمان: $dd — $hh:$mm'),
+        ],
+      ),
+    );
   }
 
   @override
@@ -34,34 +118,21 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: _primary,
+          backgroundColor: _green,
           foregroundColor: Colors.white,
           title: const Text('اپ آفلاین سوما — فروشنده'),
           centerTitle: true,
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: _turquoise,
-          foregroundColor: Colors.white,
-          onPressed: () {
-            _tx.merchantBalance += 100000;
-            setState(() {});
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('۱۰۰٬۰۰۰ ریال به موجودی اضافه شد')),
-            );
-          },
-          icon: const Icon(Icons.add_card),
-          label: const Text('افزایش موجودی آزمایشی'),
         ),
         body: Padding(
           padding: const EdgeInsets.all(16),
           child: ListView(
             children: [
-              // موجودی
+              // موجودی (عنوان دقیق)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: _primary.withOpacity(0.2)),
+                  border: Border.all(color: _green.withOpacity(0.2)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -79,9 +150,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     const Spacer(),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _turquoise,
-                        foregroundColor: Colors.white,
-                      ),
+                        backgroundColor: _turquoise, foregroundColor: Colors.white),
                       onPressed: () => setState(() {}),
                       child: const Text('بروزرسانی'),
                     ),
@@ -89,12 +158,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // مبلغ
+
+              // مبلغ دریافت
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: _primary.withOpacity(0.2)),
+                  border: Border.all(color: _green.withOpacity(0.2)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -115,35 +185,54 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // نحوه دریافت
+
+              // برچسب منبع (اختیاری برای ثبت داخلی)
+              Text('منبع تراکنش (برچسب داخلی)',
+                  style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                    color: _green, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              _sourceChips(),
+              const SizedBox(height: 16),
+
+              // روش دریافت
               Text('روش دریافت',
-                  style: TextStyle(
-                      color: _primary, fontSize: 16, fontWeight: FontWeight.w700)),
+                  style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                    color: _green, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               _actionCard(
                 icon: Icons.bluetooth_searching,
                 title: 'دریافت با بلوتوث',
                 color: _turquoise,
                 onTap: () {
-                  final amount = double.tryParse(_amountCtrl.text.replaceAll('٬', '')) ?? 0;
+                  final amount = _readAmount();
                   Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => ReceiveBluetoothScreen(amount: amount, tx: _tx),
-                  ));
+                    builder: (_) => BluetoothReceiveScreen(
+                      amount: amount,
+                      source: _source,
+                      tx: _tx,
+                    ),
+                  )).then((_) => setState(() {}));
                 },
               ),
               const SizedBox(height: 8),
               _actionCard(
                 icon: Icons.qr_code_2,
                 title: 'تولید QR برای خریدار',
-                color: _primary,
+                color: _green,
                 onTap: () {
-                  final amount = double.tryParse(_amountCtrl.text.replaceAll('٬', '')) ?? 0;
+                  final amount = _readAmount();
                   Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => GenerateQrScreen(amount: amount, tx: _tx),
-                  ));
+                    builder: (_) => GenerateQrScreen(
+                      amount: amount,
+                      source: _source,
+                      tx: _tx,
+                    ),
+                  )).then((_) => setState(() {}));
                 },
               ),
               const SizedBox(height: 16),
+
+              _receiptBox(),
             ],
           ),
         ),
@@ -173,10 +262,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             children: [
               CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
               const Icon(Icons.chevron_left),
             ],
           ),
