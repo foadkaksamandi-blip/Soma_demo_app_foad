@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../services/transaction_service.dart';
 import 'bluetooth_pay_screen.dart';
 import 'scan_qr_screen.dart';
-
-enum PaySource { balance, subsidy, emergency, crypto }
 
 class BuyerHomeScreen extends StatefulWidget {
   const BuyerHomeScreen({super.key});
@@ -16,10 +15,17 @@ class BuyerHomeScreen extends StatefulWidget {
 class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   final _amountCtrl = TextEditingController();
   final _nf = NumberFormat.decimalPattern('fa');
-  PaySource _source = PaySource.balance;
 
-  // یک نمونه سرویس مشترک برای صفحه‌ها
   final TransactionService _tx = TransactionService();
+
+  // منبع پرداخت: balance | subsidy | emergency | crypto
+  String _source = 'balance';
+
+  Color get _turquoise => const Color(0xFF1ABC9C);
+  Color get _green => const Color(0xFF27AE60);
+  Color get _textDark => const Color(0xFF0B2545);
+
+  String _fmt(double v) => _nf.format(v.round());
 
   @override
   void dispose() {
@@ -27,11 +33,87 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     super.dispose();
   }
 
-  String _fmt(double v) => _nf.format(v.round());
+  void _pickSource(String s) => setState(() => _source = s);
 
-  Color get _primary => const Color(0xFF1ABC9C);
-  Color get _success => const Color(0xFF27AE60);
-  Color get _textDark => const Color(0xFF0B2545);
+  double _readAmount() {
+    final raw = _amountCtrl.text.replaceAll(RegExp(r'[^\d]'), '');
+    return double.tryParse(raw) ?? 0;
+  }
+
+  Widget _sourceChips() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ChoiceChip(
+          selected: _source == 'balance',
+          label: const Text('موجودی حساب'),
+          onSelected: (_) => _pickSource('balance'),
+        ),
+        ChoiceChip(
+          selected: _source == 'subsidy',
+          label: const Text('موجودی یارانه'),
+          onSelected: (_) => _pickSource('subsidy'),
+        ),
+        ChoiceChip(
+          selected: _source == 'emergency',
+          label: const Text('موجودی اضطراری ملی'),
+          onSelected: (_) => _pickSource('emergency'),
+        ),
+        ChoiceChip(
+          selected: _source == 'crypto',
+          label: const Text('موجودی کیف پول رمز ارز ملی'),
+          onSelected: (_) => _pickSource('crypto'),
+        ),
+      ],
+    );
+  }
+
+  Widget _receiptBox() {
+    final r = _tx.getLastReceipt();
+    if (r == null) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _turquoise.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: _turquoise.withOpacity(0.2)),
+        ),
+        child: const Text('هنوز تراکنشی ثبت نشده است.'),
+      );
+    }
+    final t = r.timestamp;
+    final hh = t.hour.toString().padLeft(2, '0');
+    final mm = t.minute.toString().padLeft(2, '0');
+    final dd = '${t.year}/${t.month.toString().padLeft(2, '0')}/${t.day.toString().padLeft(2, '0')}';
+    final methodFa = r.method == 'bluetooth' ? 'بلوتوث' : 'QR';
+    final sourceFa = {
+      'balance': 'موجودی حساب',
+      'subsidy': 'موجودی یارانه',
+      'emergency': 'موجودی اضطراری ملی',
+      'crypto': 'موجودی کیف پول رمز ارز ملی',
+    }[r.source]!;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _green.withOpacity(0.25)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('رسید آخرین تراکنش', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text('کد: ${r.id.substring(0, 12)}'),
+          Text('مبلغ: ${_fmt(r.amount)} ریال'),
+          Text('روش: $methodFa'),
+          Text('منبع: $sourceFa'),
+          Text('زمان: $dd — $hh:$mm'),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,154 +121,142 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: _primary,
+          backgroundColor: _turquoise,
           foregroundColor: Colors.white,
-          centerTitle: true,
           title: const Text('اپ آفلاین سوما — خریدار'),
+          centerTitle: true,
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: _success,
-          foregroundColor: Colors.white,
-          onPressed: () {
-            _tx.buyerBalance += 100000;
-            setState(() {});
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('۱۰۰٬۰۰۰ ریال به موجودی اضافه شد.')),
-            );
-          },
-          icon: const Icon(Icons.add_card),
-          label: const Text('افزایش موجودی آزمایشی'),
-        ),
-        body: ListView(
+        body: Padding(
           padding: const EdgeInsets.all(16),
-          children: [
-            // کارت موجودی
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: _primary.withOpacity(0.2)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.account_balance_wallet, color: Color(0xFF27AE60)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'موجودی: ${_fmt(_tx.buyerBalance)} ریال',
-                    style: TextStyle(
-                      color: _textDark,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+          child: ListView(
+            children: [
+              // موجودی (عنوان دقیق)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _turquoise.withOpacity(0.25)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_wallet, color: Color(0xFF27AE60)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'موجودی: ${_fmt(_tx.buyerBalance)} ریال',
+                      style: TextStyle(
+                        color: _textDark,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _primary, foregroundColor: Colors.white),
-                    onPressed: () => setState(() {}),
-                    child: const Text('بروزرسانی'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // مبلغ خرید
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: _primary.withOpacity(0.2)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('مبلغ خرید'),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'مثلاً ۵۰۰٬۰۰۰',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+                    const Spacer(),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _turquoise, foregroundColor: Colors.white),
+                      onPressed: () => setState(() {}),
+                      child: const Text('بروزرسانی'),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _green, foregroundColor: Colors.white),
+                      onPressed: () {
+                        _tx.addBuyerTestFunds(100000);
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('۱۰۰٬۰۰۰ ریال به موجودی اضافه شد')),
+                        );
+                      },
+                      icon: const Icon(Icons.add_card),
+                      label: const Text('افزایش آزمایشی'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            // منبع پرداخت
-            Text('انتخاب منبع پرداخت',
-                style: TextStyle(
-                    color: _primary, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _chip('موجودی حساب', PaySource.balance),
-                _chip('یارانه', PaySource.subsidy),
-                _chip('اضطراری', PaySource.emergency),
-                _chip('رمز ارز ملی', PaySource.crypto),
-              ],
-            ),
-            const SizedBox(height: 24),
-            // مسیرهای پرداخت
-            Text('نحوه پرداخت',
-                style: TextStyle(
-                    color: _primary, fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            _actionCard(
-              icon: Icons.bluetooth,
-              title: 'پرداخت با بلوتوث',
-              color: _primary,
-              onTap: () {
-                final amount = double.tryParse(_amountCtrl.text.replaceAll('٬', '')) ?? 0;
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => BluetoothPayScreen(
-                    amount: amount,
-                    source: _source.name,
-                    tx: _tx,
-                  ),
-                ));
-              },
-            ),
-            const SizedBox(height: 8),
-            _actionCard(
-              icon: Icons.qr_code_scanner,
-              title: 'پرداخت با QR کد (اسکن)',
-              color: _success,
-              onTap: () {
-                final amount = double.tryParse(_amountCtrl.text.replaceAll('٬', '')) ?? 0;
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => ScanQrScreen(
-                    expectedAmount: amount,
-                    source: _source.name,
-                    tx: _tx,
-                  ),
-                ));
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 16),
+
+              // مبلغ خرید
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _turquoise.withOpacity(0.25)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('مبلغ خرید'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _amountCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        hintText: 'مثلاً ۵۰۰٬۰۰۰',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // انتخاب منبع پرداخت (دکمه‌ها با عبارات قفل‌شده)
+              Text('منبع پرداخت', style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                color: _turquoise, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              _sourceChips(),
+              const SizedBox(height: 16),
+
+              // روش پرداخت
+              Text('نحوه پرداخت', style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                color: _turquoise, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              _payCard(
+                icon: Icons.bluetooth,
+                title: 'پرداخت با بلوتوث',
+                color: _turquoise,
+                onTap: () {
+                  final amount = _readAmount();
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => BluetoothPayScreen(
+                      amount: amount,
+                      source: _source,
+                      tx: _tx,
+                    ),
+                  )).then((_) => setState(() {}));
+                },
+              ),
+              const SizedBox(height: 8),
+              _payCard(
+                icon: Icons.qr_code_2,
+                title: 'پرداخت با QR کد (اسکن)',
+                color: _green,
+                onTap: () {
+                  final amount = _readAmount();
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => ScanQrScreen(
+                      expectedAmount: amount,
+                      source: _source,
+                      tx: _tx,
+                    ),
+                  )).then((_) => setState(() {}));
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // رسید
+              _receiptBox(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _chip(String label, PaySource value) {
-    final selected = _source == value;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => setState(() => _source = value),
-      selectedColor: _primary.withOpacity(0.15),
-    );
-  }
-
-  Widget _actionCard({
+  Widget _payCard({
     required IconData icon,
     required String title,
     required Color color,
@@ -206,13 +276,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                  backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
+              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
               const Icon(Icons.chevron_left),
             ],
           ),
