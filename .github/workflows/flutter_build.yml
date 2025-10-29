@@ -1,7 +1,7 @@
 name: Build Buyer App
 
 on:
-  workflow_dispatch:      # فعال‌سازی دکمه "Run workflow"
+  workflow_dispatch:
   push:
     branches: [ main ]
   pull_request:
@@ -19,7 +19,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.25.2'
+          flutter-version: '3.24.3'
           channel: 'stable'
 
       - name: Flutter Pub Get
@@ -32,7 +32,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4   # نسخه جدید و فعال
+        uses: actions/upload-artifact@v4
         with:
           name: soma-buyer-release
           path: build/app/outputs/flutter-apk/app-release.apk
