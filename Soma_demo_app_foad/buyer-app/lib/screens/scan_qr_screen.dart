@@ -1,42 +1,69 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-
 import '../services/transaction_service.dart';
-import '../services/local_db.dart';
-import '../models/tx_log.dart';
 
-class QrPayScreen extends StatefulWidget {
-  const QrPayScreen({super.key});
+class ScanQrScreen extends StatefulWidget {
+  final double expectedAmount;
+  final String source;
+  final TransactionService tx;
+
+  const ScanQrScreen({
+    super.key,
+    required this.expectedAmount,
+    required this.source,
+    required this.tx,
+  });
+
   @override
-  State<QrPayScreen> createState() => _QrPayScreenState();
+  State<ScanQrScreen> createState() => _ScanQrScreenState();
 }
 
-class _QrPayScreenState extends State<QrPayScreen> {
-  String? _last;
+class _ScanQrScreenState extends State<ScanQrScreen> {
+  bool _done = false;
+  Color get _primary => const Color(0xFF1ABC9C);
+  Color get _success => const Color(0xFF27AE60);
 
-  void _onDetect(BarcodeCapture cap) {
-    final raw = cap.barcodes.first.rawValue ?? '';
-    if (!raw.startsWith('SOMA|')) return;
+  void _onDetect(BarcodeCapture capture) {
+    if (_done) return;
+    final code = capture.barcodes.firstOrNull?.rawValue;
+    if (code == null) return;
 
-    final data = TransactionService.parseInboundPayload(raw);
-    final amount = int.tryParse(data['AMOUNT'] ?? '0') ?? 0;
-    final src = data['SOURCE'] ?? 'نامشخص';
+    try {
+      final data = jsonDecode(code);
+      final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+      if (amount <= 0) {
+        throw Exception('invalid amount');
+      }
+      // در این نسخه: تطبیق با مبلغ واردشده اگر >0 بود
+      if (widget.expectedAmount > 0 && amount != widget.expectedAmount) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('مبلغ QR با مبلغ ورودی همخوانی ندارد')),
+        );
+        return;
+      }
 
-    LocalDb.instance.addToWallet(src, amount);
+      final ok = widget.tx.processBluetoothPayment(amount);
+      if (!ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('موجودی کافی نیست')),
+        );
+        return;
+      }
 
-    final log = TxLog.success(
-      amount: amount,
-      source: src,
-      method: 'qr',
-      counterparty: 'merchant',
-    );
-
-    final confirm = TransactionService.buildMerchantConfirm(log: log);
-    setState(() => _last = confirm);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('پرداخت QR شناسایی و ذخیره شد.')),
-    );
+      setState(() => _done = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: _success,
+          content: Text('تراکنش موفق — ${amount.toInt()} ریال پرداخت شد'),
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('QR نامعتبر')),
+      );
+    }
   }
 
   @override
@@ -45,19 +72,37 @@ class _QrPayScreenState extends State<QrPayScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: const Color(0xFF2FAE60),
+          backgroundColor: _primary,
           foregroundColor: Colors.white,
-          centerTitle: true,
-          title: const Text('اسکن QR برای پرداخت'),
+          title: const Text('پرداخت با QR — اسکن'),
         ),
-        body: Column(
+        body: Stack(
           children: [
-            Expanded(child: MobileScanner(onDetect: _onDetect)),
-            if (_last != null)
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: SelectableText(_last!),
+            MobileScanner(
+              onDetect: _onDetect,
+              controller: MobileScannerController(
+                facing: CameraFacing.back,
+                detectionSpeed: DetectionSpeed.noDuplicates,
+                torchEnabled: false,
               ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeBoxConstraints().tighten().isTight
+                    ? EdgeInsets.zero
+                    : const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.45),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'دوربین را روی QR فروشنده بگیرید',
+                  style: TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ),
           ],
         ),
       ),
