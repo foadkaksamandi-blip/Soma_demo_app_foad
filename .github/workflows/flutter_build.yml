@@ -1,77 +1,71 @@
-name: Build both Buyer & Merchant Apps (release)
+name: Build Buyer & Merchant APK (release)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-buyer:
-    name: Build Buyer APK
+  build:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - name: buyer
+            cand1: buyer-app
+            cand2: buyer_app
+          - name: merchant
+            cand1: merchant-app
+            cand2: merchant_app
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.3"
+          flutter-version: '3.24.3'
           channel: stable
 
-      - name: Get dependencies (Buyer)
-        working-directory: buyer-app
+      # پیدا کردن دایرکتوری درست اپ (خطای "Expected to find project root" را می‌گیرد)
+      - name: Detect app directory
+        id: detect
+        run: |
+          if [ -f "${{ matrix.app.cand1 }}/pubspec.yaml" ]; then
+            echo "APP_DIR=${{ matrix.app.cand1 }}" >> $GITHUB_ENV
+          elif [ -f "${{ matrix.app.cand2 }}/pubspec.yaml" ]; then
+            echo "APP_DIR=${{ matrix.app.cand2 }}" >> $GITHUB_ENV
+          else
+            echo "❌ pubspec.yaml not found for ${{ matrix.app.name }}"; exit 1
+          fi
+          echo "App dir = $APP_DIR"
+
+      - name: flutter pub get
+        working-directory: ${{ env.APP_DIR }}
         run: flutter pub get
 
-      # ساخت موقت android
-      - name: Regenerate Android scaffold (Buyer)
-        working-directory: buyer-app
+      # چون فولدر android حذف شده، اسکفولد را موقت می‌سازیم
+      - name: Regenerate Android scaffold
+        working-directory: ${{ env.APP_DIR }}
         run: |
           rm -rf android || true
-          flutter create . --platforms=android --project-name buyer_app
+          flutter create . --platforms=android --project-name ${{ matrix.app.name }}_app
+          # حداقل SDK
           sed -i 's/minSdkVersion [0-9]\+/minSdkVersion 23/' android/app/build.gradle
 
-      - name: Build Buyer APK
-        working-directory: buyer-app
+      - name: Build APK (release)
+        working-directory: ${{ env.APP_DIR }}
         run: flutter build apk --release
 
-      - name: Upload Buyer APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: buyer-app-release-apk
-          path: buyer-app/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-
-  build-merchant:
-    name: Build Merchant APK
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.24.3"
-          channel: stable
-
-      - name: Get dependencies (Merchant)
-        working-directory: merchant-app
-        run: flutter pub get
-
-      # ساخت موقت android
-      - name: Regenerate Android scaffold (Merchant)
-        working-directory: merchant-app
-        run: |
-          rm -rf android || true
-          flutter create . --platforms=android --project-name merchant_app
-          sed -i 's/minSdkVersion [0-9]\+/minSdkVersion 23/' android/app/build.gradle
-
-      - name: Build Merchant APK
-        working-directory: merchant-app
-        run: flutter build apk --release
-
-      - name: Upload Merchant APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: merchant-app-release-apk
-          path: merchant-app/build/app/outputs/flutter-apk/app-release.apk
+          name: ${{ matrix.app.name }}-app-release-apk
+          path: ${{ env.APP_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
