@@ -1,6 +1,7 @@
 name: Build Buyer App
 
 on:
+  workflow_dispatch:      # فعال‌سازی دکمه "Run workflow"
   push:
     branches: [ main ]
   pull_request:
@@ -31,7 +32,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4   # نسخه جدید و فعال
         with:
           name: soma-buyer-release
           path: build/app/outputs/flutter-apk/app-release.apk
