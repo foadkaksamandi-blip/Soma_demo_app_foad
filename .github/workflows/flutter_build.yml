@@ -1,20 +1,12 @@
-name: Build Buyer App
+name: Build both Buyer & Merchant Apps (release)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
-  build:
-    name: Buyer - build APK (release)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Soma_demo_app_foad/buyer-app   # مسیر پروژه Flutter
-
+  build-buyer:
+    name: Build Buyer APK
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,20 +14,64 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.3'
-          channel: 'stable'
+          flutter-version: "3.24.3"
+          channel: stable
 
-      - name: Get Flutter dependencies
+      - name: Get dependencies (Buyer)
+        working-directory: buyer-app
         run: flutter pub get
 
-      - name: Clean build cache
-        run: flutter clean && rm -rf ~/.pub-cache
+      # ساخت موقت android
+      - name: Regenerate Android scaffold (Buyer)
+        working-directory: buyer-app
+        run: |
+          rm -rf android || true
+          flutter create . --platforms=android --project-name buyer_app
+          sed -i 's/minSdkVersion [0-9]\+/minSdkVersion 23/' android/app/build.gradle
 
-      - name: Build APK (release)
+      - name: Build Buyer APK
+        working-directory: buyer-app
         run: flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload Buyer APK
         uses: actions/upload-artifact@v4
         with:
-          name: soma-buyer-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: buyer-app-release-apk
+          path: buyer-app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  build-merchant:
+    name: Build Merchant APK
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.3"
+          channel: stable
+
+      - name: Get dependencies (Merchant)
+        working-directory: merchant-app
+        run: flutter pub get
+
+      # ساخت موقت android
+      - name: Regenerate Android scaffold (Merchant)
+        working-directory: merchant-app
+        run: |
+          rm -rf android || true
+          flutter create . --platforms=android --project-name merchant_app
+          sed -i 's/minSdkVersion [0-9]\+/minSdkVersion 23/' android/app/build.gradle
+
+      - name: Build Merchant APK
+        working-directory: merchant-app
+        run: flutter build apk --release
+
+      - name: Upload Merchant APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: merchant-app-release-apk
+          path: merchant-app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
