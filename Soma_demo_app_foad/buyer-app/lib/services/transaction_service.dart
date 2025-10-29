@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
-/// مدل رسید تراکنش
 class TxReceipt {
-  final String id;          // کد تراکنش
-  final double amount;      // مبلغ
-  final String method;      // bluetooth | qr
-  final String source;      // balance | subsidy | emergency | crypto
-  final DateTime timestamp; // زمان ثبت
+  final String id;
+  final double amount;
+  final String method; // bluetooth | qr
+  final String source; // balance | subsidy | emergency | crypto
+  final DateTime timestamp;
 
   TxReceipt({
     required this.id,
@@ -34,36 +33,62 @@ class TxReceipt {
       );
 }
 
-/// سرویس تراکنش (درون‌حافظه‌ای برای دمو)
 class TransactionService {
-  /// موجودی‌های آزمایشی (سمت خریدار/فروشنده)
-  double buyerBalance = 500000;
-  double merchantBalance = 250000;
+  double buyerBalance = 5000000;
+  double subsidyBalance = 1500000;
+  double emergencyBalance = 800000;
+  double cryptoBalance = 2500000;
 
-  /// آخرین رسید ثبت‌شده (برای نمایش پایین صفحه)
   TxReceipt? lastReceipt;
 
-  /// تولید payload برای QR (فروشنده می‌سازد، خریدار اسکن می‌کند)
-  String generateQrData(double amount) {
+  String generateQrPayload(double amount) {
     final data = {
-      "id": const Uuid().v4(),
-      "amount": amount,
-      "timestamp": DateTime.now().toIso8601String(),
+      'id': const Uuid().v4(),
+      'amount': amount,
+      'timestamp': DateTime.now().toIso8601String(),
     };
     return jsonEncode(data);
   }
 
-  /// اعمال تراکنش موفق (کاهش از خریدار، افزایش به فروشنده) + ثبت رسید
   bool applyPayment({
     required double amount,
-    required String method, // 'bluetooth' | 'qr'
-    required String source, // 'balance' | 'subsidy' | 'emergency' | 'crypto'
+    required String method, // bluetooth | qr
+    required String source, // balance | subsidy | emergency | crypto
   }) {
     if (amount <= 0) return false;
-    if (buyerBalance < amount) return false;
 
-    buyerBalance -= amount;
-    merchantBalance += amount;
+    double sourceBalance() {
+      switch (source) {
+        case 'subsidy':
+          return subsidyBalance;
+        case 'emergency':
+          return emergencyBalance;
+        case 'crypto':
+          return cryptoBalance;
+        default:
+          return buyerBalance;
+      }
+    }
+
+    void setSourceBalance(double v) {
+      switch (source) {
+        case 'subsidy':
+          subsidyBalance = v;
+          return;
+        case 'emergency':
+          emergencyBalance = v;
+          return;
+        case 'crypto':
+          cryptoBalance = v;
+          return;
+        default:
+          buyerBalance = v;
+      }
+    }
+
+    if (sourceBalance() < amount) return false;
+
+    setSourceBalance(sourceBalance() - amount);
 
     lastReceipt = TxReceipt(
       id: const Uuid().v4(),
@@ -73,13 +98,5 @@ class TransactionService {
       timestamp: DateTime.now(),
     );
     return true;
-  }
-
-  /// دسترسی به رسید آخر (برای نمایش UI)
-  TxReceipt? getLastReceipt() => lastReceipt;
-
-  /// افزایش موجودی آزمایشی خریدار
-  void addBuyerTestFunds(double amount) {
-    buyerBalance += amount;
   }
 }
