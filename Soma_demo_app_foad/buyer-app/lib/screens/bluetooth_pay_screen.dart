@@ -1,149 +1,168 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import '../services/local_db.dart';
 import '../services/transaction_service.dart';
-import '../models/tx_log.dart';
 
 class BluetoothPayScreen extends StatefulWidget {
-  const BluetoothPayScreen({super.key});
+  final double amount;
+  final String source;
+  final TransactionService tx;
+
+  const BluetoothPayScreen({
+    super.key,
+    required this.amount,
+    required this.source,
+    required this.tx,
+  });
 
   @override
   State<BluetoothPayScreen> createState() => _BluetoothPayScreenState();
 }
 
 class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
+  final _found = <ScanResult>[];
+  StreamSubscription<List<ScanResult>>? _sub;
+  bool _scanning = false;
   bool _connected = false;
-  String? _status;
-  final TextEditingController _amountCtrl = TextEditingController();
-  String _source = 'عادی';
   BluetoothDevice? _device;
+
+  Color get _primary => const Color(0xFF1ABC9C);
+  Color get _success => const Color(0xFF27AE60);
+
+  @override
+  void initState() {
+    super.initState();
+    _startScan();
+  }
 
   @override
   void dispose() {
-    _amountCtrl.dispose();
+    _sub?.cancel();
     super.dispose();
   }
 
-  void _scanAndConnect() async {
+  Future<void> _startScan() async {
     setState(() {
-      _status = 'در حال جستجوی دستگاه...';
+      _found.clear();
+      _scanning = true;
     });
-
-    FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
-
-    FlutterBluePlus.scanResults.listen((results) async {
-      for (var r in results) {
-        if (r.device.name.contains('SOMA')) {
-          FlutterBluePlus.stopScan();
-          _device = r.device;
-          await _device!.connect();
-          setState(() {
-            _connected = true;
-            _status = 'اتصال ایمن برقرار شد ✔️';
-          });
-          break;
-        }
-      }
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+    _sub = FlutterBluePlus.scanResults.listen((results) {
+      setState(() {
+        _found
+          ..clear()
+          ..addAll(results);
+      });
     });
+    await Future.delayed(const Duration(seconds: 6));
+    await FlutterBluePlus.stopScan();
+    setState(() => _scanning = false);
   }
 
-  void _performPayment() {
-    final amt = int.tryParse(_amountCtrl.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    if (amt <= 0) return;
+  Future<void> _connect(BluetoothDevice d) async {
+    try {
+      await d.connect(autoConnect: false);
+      setState(() {
+        _device = d;
+        _connected = true;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('اتصال امن برقرار شد — آماده پرداخت')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('اتصال ناموفق — دوباره تلاش کنید')),
+        );
+      }
+    }
+  }
 
-    LocalDB.instance.addToWallet(_source, -amt);
-    final log = TxLog.success(
-      amount: amt,
-      source: _source,
-      method: 'Bluetooth',
-      counterparty: 'merchant',
-    );
-    final payload = TransactionService.buildMerchantConfirm(log: log);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'پرداخت ${amt} ریال از کیف $_source انجام شد.\nکد: ${log.id}',
-          textDirection: TextDirection.rtl,
+  Future<void> _pay() async {
+    // در این نسخه، پس از اتصال، تراکنش محلی اعمال می‌شود.
+    final ok = widget.tx.processBluetoothPayment(widget.amount);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('موجودی کافی نیست')),
+      );
+      return;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: _success,
+          content: Text('تراکنش موفق — ${widget.amount.toInt()} ریال پرداخت شد'),
         ),
-        backgroundColor: Colors.green,
-      ),
-    );
-
-    setState(() => _status = payload);
+      );
+      Navigator.pop(context, true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color primaryTurquoise = Color(0xFF1ABC9C);
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: primaryTurquoise,
+          backgroundColor: _primary,
           foregroundColor: Colors.white,
           title: const Text('پرداخت با بلوتوث'),
-          centerTitle: true,
         ),
         body: Padding(
           padding: const EdgeInsets.all(16),
-          child: ListView(
+          child: Column(
             children: [
-              ElevatedButton.icon(
-                icon: const Icon(Icons.bluetooth),
-                label: const Text('اتصال بلوتوث'),
-                onPressed: _scanAndConnect,
-              ),
-              const SizedBox(height: 12),
-              if (_status != null)
-                Text(
-                  _status!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold),
-                ),
-              const SizedBox(height: 24),
-              const Text('انتخاب کیف پول'),
-              Wrap(
-                spacing: 8,
+              Row(
                 children: [
-                  ChoiceChip(
-                    label: const Text('عادی'),
-                    selected: _source == 'عادی',
-                    onSelected: (_) => setState(() => _source = 'عادی'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('یارانه'),
-                    selected: _source == 'یارانه',
-                    onSelected: (_) => setState(() => _source = 'یارانه'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('اضطراری'),
-                    selected: _source == 'اضطراری',
-                    onSelected: (_) => setState(() => _source = 'اضطراری'),
-                  ),
-                  ChoiceChip(
-                    label: const Text('رمز ارز ملی'),
-                    selected: _source == 'رمز ارز ملی',
-                    onSelected: (_) => setState(() => _source = 'رمز ارز ملی'),
+                  Text('مبلغ: ${widget.amount.toInt()} ریال',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: Text(_scanning ? 'در حال اسکن…' : 'اسکن دوباره'),
+                    onPressed: _scanning ? null : _startScan,
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _amountCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'مبلغ پرداخت (ریال)',
-                  border: OutlineInputBorder(),
-                ),
+              Expanded(
+                child: _found.isEmpty
+                    ? const Center(child: Text('دستگاهی پیدا نشد'))
+                    : ListView.builder(
+                        itemCount: _found.length,
+                        itemBuilder: (_, i) {
+                          final r = _found[i];
+                          final name = r.device.platformName.isNotEmpty
+                              ? r.device.platformName
+                              : r.device.remoteId.str;
+                          return Card(
+                            child: ListTile(
+                              leading: const Icon(Icons.bluetooth),
+                              title: Text(name),
+                              subtitle: Text('RSSI: ${r.rssi}'),
+                              trailing: ElevatedButton(
+                                onPressed: () => _connect(r.device),
+                                child: const Text('اتصال'),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.send),
-                label: const Text('انجام پرداخت'),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: _connected ? _performPayment : null,
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.lock),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _connected ? _success : Colors.grey,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: _connected ? _pay : null,
+                  label: const Text('پرداخت'),
+                ),
               ),
             ],
           ),
