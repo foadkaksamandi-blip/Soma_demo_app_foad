@@ -37,7 +37,7 @@ jobs:
         run: |
           test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found" && exit 1)
 
-      # اسکَفلد اندروید تمیز تا AGP 8 درست ستاپ شود
+      # بازتولید اسکفلد اندروید تمیز (تا Gradle/AGP درست باشند)
       - name: Regenerate Android scaffold (safe)
         run: |
           APP_NAME="${{ matrix.app.id }}_app"
@@ -53,60 +53,86 @@ jobs:
         working-directory: ${{ matrix.app.dir }}
         run: flutter pub get
 
-      # 🔧 پَچ مشخص و مستقیم روی پلاگین‌های بلوتوث که از flutter.* استفاده می‌کنند
-      - name: Patch flutter_blue_plus plugins for AGP 8
+      # پچِ سراسری و مقاوم: هم build.gradle و هم build.gradle.kts در همه‌ی ورژن‌های flutter_blue_plus*
+      - name: Patch flutter_blue_plus* (Groovy/KTS) for AGP 8
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          # ریشهٔ کشِ pub.dev در runner
-          CACHE_ROOT="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev"
+          # کش pub.dev
+          CACHE_ROOT="${PUB_CACHE:-$HOME/.pub-cache}/hosted"
           if [ ! -d "$CACHE_ROOT" ]; then
-            echo "⚠️ Pub cache not found: $CACHE_ROOT"
-            exit 0
+            echo "❌ Pub cache root not found: $CACHE_ROOT"
+            exit 1
           fi
 
-          # لیست فایل‌های build.gradle هدف‌دار (نسخه ممکن است تغییر کند، پس از wildcard استفاده می‌کنیم)
-          TARGETS=()
-          while IFS= read -r f; do TARGETS+=("$f"); done < <( \
-            ls "$CACHE_ROOT"/flutter_blue_plus_android-*/android/build.gradle 2>/dev/null || true
-          )
-          while IFS= read -r f; do TARGETS+=("$f"); done < <( \
-            ls "$CACHE_ROOT"/flutter_blue_plus-*/android/build.gradle 2>/dev/null || true
-          )
+          # همه مسیرهای candidate که نام‌شان flutter_blue_plus یا flutter_blue_plus_android است
+          mapfile -t CANDIDATES < <(find "$CACHE_ROOT" -type d \( -name "pub.dev" -o -name "pub.dartlang.org" \) -prune -o \
+            -type d \( -name "flutter_blue_plus*" -o -name "flutter_blue_plus_android*" \) -print 2>/dev/null | sort)
 
-          if [ ${#TARGETS[@]} -eq 0 ]; then
-            echo "ℹ️ No flutter_blue_plus* build.gradle files found to patch."
+          if [ ${#CANDIDATES[@]} -eq 0 ]; then
+            echo "ℹ️ No flutter_blue_plus* package found under cache. (Will continue)"
           fi
 
-          for F in "${TARGETS[@]}"; do
-            echo "🔧 Patching: $F"
+          patched_any=false
 
-            # بکاپ
-            cp "$F" "$F.bak"
-
-            # اگر ابتدای فایل plugins DSL ندارد، اضافه نمی‌کنیم؛ فقط جایگزینی انجام می‌دهیم
-            # جایگزینی ارجاعات flutter.* با مقادیر ثابت امن
-            sed -i 's/compileSdkVersion[[:space:]]\+flutter\.[^)\n]*/compileSdkVersion 34/g' "$F"
-            sed -i 's/targetSdkVersion[[:space:]]\+flutter\.[^)\n]*/targetSdkVersion 34/g' "$F"
-            sed -i 's/minSdkVersion[[:space:]]\+flutter\.[^)\n]*/minSdkVersion 21/g' "$F"
-            sed -i 's/ndkVersion[[:space:]]\+flutter\.[^)\n]*/ndkVersion "25.1.8937393"/g' "$F"
-
-            # هر خط باقی‌مانده که شامل flutter. باشد را کامنت کن تا Gradle ایراد نگیرد
-            sed -i 's/^\([[:space:]]*\)\(.*flutter\..*\)$/\1\/\/ \2/g' "$F"
-
-            # اطمینان از وجود block android و compileSdk (اگر نبود، یک خط compileSdkVersion 34 تزریق می‌کنیم)
-            if ! grep -q "compileSdkVersion" "$F"; then
+          patch_gradle_groovy() {
+            local f="$1"
+            cp "$f" "$f.bak"
+            # جایگزینی ارجاعات flutter.*
+            sed -i 's/\bcompileSdkVersion[[:space:]]\+flutter\.[^)\n]*/compileSdkVersion 34/g' "$f"
+            sed -i 's/\btargetSdkVersion[[:space:]]\+flutter\.[^)\n]*/targetSdkVersion 34/g' "$f"
+            sed -i 's/\bminSdkVersion[[:space:]]\+flutter\.[^)\n]*/minSdkVersion 21/g' "$f"
+            sed -i 's/\bndkVersion[[:space:]]\+flutter\.[^)\n]*/ndkVersion "25.1.8937393"/g' "$f"
+            # کامنت کردن باقی‌مانده‌ی خطوط دارای flutter.
+            sed -i 's/^\([[:space:]]*\)\(.*flutter\..*\)$/\1\/\/ \2/g' "$f"
+            # تزریق compileSdkVersion اگر نبود
+            if ! grep -qE '^[[:space:]]*compileSdkVersion[[:space:]]+[0-9]+' "$f"; then
               awk '
                 /android[[:space:]]*\{/ && !ins { print; print "    compileSdkVersion 34"; ins=1; next }
                 { print }
-              ' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
+                END { if (!ins) { print "android {"; print "    compileSdkVersion 34"; print "}"} }
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
             fi
+          }
 
-            echo "✅ Patched $F"
+          patch_gradle_kts() {
+            local f="$1"
+            cp "$f" "$f.bak"
+            # جایگزینی ارجاعات flutter.* به سینتکس KTS
+            sed -i 's/\bcompileSdk[[:space:]]*=[[:space:]]*flutter\.[^)\n]*/compileSdk = 34/g' "$f"
+            sed -i 's/\btargetSdk[[:space:]]*=[[:space:]]*flutter\.[^)\n]*/targetSdk = 34/g' "$f"
+            sed -i 's/\bminSdk[[:space:]]*=[[:space:]]*flutter\.[^)\n]*/minSdk = 21/g' "$f"
+            # کامنت کردن باقی‌مانده‌ی خطوط دارای flutter.
+            sed -i 's/^\([[:space:]]*\)\(.*flutter\..*\)$/\1\/\/ \2/g' "$f"
+            # تزریق compileSdk اگر نبود
+            if ! grep -qE '^[[:space:]]*compileSdk[[:space:]]*=' "$f"; then
+              awk '
+                /android[[:space:]]*\{/ && !ins { print; print "    compileSdk = 34"; ins=1; next }
+                { print }
+                END { if (!ins) { print "android {"; print "    compileSdk = 34"; print "}"} }
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            fi
+          }
+
+          for pkg in "${CANDIDATES[@]}"; do
+            # فایل‌های هدف: build.gradle و build.gradle.kts در زیرپوشه android/
+            mapfile -t FILES < <(find "$pkg" -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -path "*/android/*" 2>/dev/null | sort)
+            for f in "${FILES[@]}"; do
+              echo "🔧 Patching $f"
+              case "$f" in
+                *.kts) patch_gradle_kts "$f" ;;
+                *)     patch_gradle_groovy "$f" ;;
+              esac
+              echo "✅ Patched: $f"
+              patched_any=true
+            done
           done
 
-      # ساخت ریلیز
+          if [ "$patched_any" = false ]; then
+            echo "ℹ️ No target gradle files were patched (none found). Continuing."
+          fi
+
       - name: Build APK (release)
         working-directory: ${{ matrix.app.dir }}
         run: |
