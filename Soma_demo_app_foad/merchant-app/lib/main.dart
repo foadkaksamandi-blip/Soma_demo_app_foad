@@ -1,179 +1,108 @@
-import 'dart:ui' as ui; // برای TextDirection
 import 'package:flutter/material.dart';
 
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MerchantApp());
-}
+void main() => runApp(const SomaMerchantApp());
 
-class MerchantApp extends StatelessWidget {
-  const MerchantApp({super.key});
+class SomaMerchantApp extends StatelessWidget {
+  const SomaMerchantApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'App Offline SOMA — Merchant',
+      title: 'SOMA Offline — Merchant',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-      ),
-      home: const MerchantHome(),
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
+      home: const MerchantHomePage(),
     );
   }
 }
 
-class MerchantHome extends StatefulWidget {
-  const MerchantHome({super.key});
+class MerchantHomePage extends StatefulWidget {
+  const MerchantHomePage({super.key});
 
   @override
-  State<MerchantHome> createState() => _MerchantHomeState();
+  State<MerchantHomePage> createState() => _MerchantHomePageState();
 }
 
-class _MerchantHomeState extends State<MerchantHome> {
-  final TextEditingController balanceCtrl = TextEditingController(text: '0');
-  final TextEditingController amountCtrl = TextEditingController();
-  final TextEditingController offlineTxCtrl = TextEditingController();
-  bool secureConnect = true;
-  bool anonymous = false;
+class _MerchantHomePageState extends State<MerchantHomePage> {
+  final TextEditingController _receivedCtrl = TextEditingController(text: "0");
+  final TextEditingController _lastTxCtrl = TextEditingController();
 
-  @override
-  void dispose() {
-    balanceCtrl.dispose();
-    amountCtrl.dispose();
-    offlineTxCtrl.dispose();
-    super.dispose();
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _simulateReceive(String via) {
+    final nowId = DateTime.now().millisecondsSinceEpoch.toString();
+    setState(() {
+      _lastTxCtrl.text = nowId;
+      final current = int.tryParse(_receivedCtrl.text) ?? 0;
+      _receivedCtrl.text = (current + 1).toString();
+    });
+    _toast("دریافت تراکنش (Placeholder) از مسیر $via");
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: ui.TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('اپ آفلاین سوما — اپ فروشنده'),
-          centerTitle: true,
-        ),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Row(
-              children: [
-                const Text('موجودی:'),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: balanceCtrl,
-                    readOnly: true,
-                    decoration: const InputDecoration(hintText: 'موجودی فروشنده'),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("اپ آفلاین سوما — اپ فروشنده"),
+        centerTitle: true,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              const Expanded(flex: 2, child: Text("تعداد دریافتی‌ها")),
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: _receivedCtrl,
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: secureConnect,
-                    onChanged: (v) => setState(() => secureConnect = v ?? false),
-                    title: const Text('اتصال امن'),
-                    controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Expanded(flex: 2, child: Text("آخرین شناسه تراکنش")),
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: _lastTxCtrl,
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                    hintText: "ID",
+                    border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: anonymous,
-                    onChanged: (v) => setState(() => anonymous = v ?? false),
-                    title: const Text('عدم شناسایی'),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _simulateReceive("Bluetooth"),
+                  child: const Text("دریافت از بلوتوث"),
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _onBluetoothListen,
-                    child: const Text('اسکن بلوتوث'),
-                  ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.tonal(
+                  onPressed: () => _simulateReceive("QR"),
+                  child: const Text("دریافت از QR"),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _onShowQr,
-                    child: const Text('QR کد'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('مبلغ خرید:'),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(hintText: 'مبلغ به ریال'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('تراکنش آفلاین:'),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: offlineTxCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(hintText: 'شناسه/شماره'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _onSettle,
-              icon: const Icon(Icons.download_done),
-              label: const Text('تسویه آفلاین'),
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
-  }
-
-  void _onBluetoothListen() {
-    _snack('(دمو) حالت پذیرنده بلوتوث فعال شد');
-  }
-
-  void _onShowQr() {
-    _snack('(دمو) نمایش QR برای دریافت');
-  }
-
-  void _onSettle() {
-    final bal = int.tryParse(balanceCtrl.text.replaceAll(',', '')) ?? 0;
-    final amt = int.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
-    if (amt <= 0) return _snack('مبلغ نامعتبر');
-    final newBal = bal + amt;
-    setState(() => balanceCtrl.text = newBal.toString());
-    _snack('تسویه آفلاین ثبت شد ✔');
-  }
-
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
