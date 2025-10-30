@@ -37,7 +37,7 @@ jobs:
         run: |
           test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found" && exit 1)
 
-      # ایجاد پروژه موقت و کپی فقط android/ (جلوگیری از تداخل)
+      # اسکَفلد اندروید تمیز تا AGP 8 درست ستاپ شود
       - name: Regenerate Android scaffold (safe)
         run: |
           APP_NAME="${{ matrix.app.id }}_app"
@@ -53,47 +53,62 @@ jobs:
         working-directory: ${{ matrix.app.dir }}
         run: flutter pub get
 
-      # پچ کردن پلاگین‌ها برای AGP 8+: حذف ارجاع‌های flutter.* و ست‌کردن SDK ها
-      - name: Patch Flutter plugins for AGP 8+
+      # 🔧 پَچ مشخص و مستقیم روی پلاگین‌های بلوتوث که از flutter.* استفاده می‌کنند
+      - name: Patch flutter_blue_plus plugins for AGP 8
         shell: bash
         run: |
           set -e
-          CACHE_DIR="${PUB_CACHE:-$HOME/.pub-cache}/hosted"
-          echo "🔍 Cache root: $CACHE_DIR"
-          if [ ! -d "$CACHE_DIR" ]; then
-            echo "⚠️ No Flutter cache found; skipping plugin patch."
+
+          # ریشهٔ کشِ pub.dev در runner
+          CACHE_ROOT="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev"
+          if [ ! -d "$CACHE_ROOT" ]; then
+            echo "⚠️ Pub cache not found: $CACHE_ROOT"
             exit 0
           fi
 
-          mapfile -t TARGETS < <(find "$CACHE_DIR" -path "*/android/build.gradle" -print)
-          for f in "${TARGETS[@]}"; do
-            echo "Patching: $f"
+          # لیست فایل‌های build.gradle هدف‌دار (نسخه ممکن است تغییر کند، پس از wildcard استفاده می‌کنیم)
+          TARGETS=()
+          while IFS= read -r f; do TARGETS+=("$f"); done < <( \
+            ls "$CACHE_ROOT"/flutter_blue_plus_android-*/android/build.gradle 2>/dev/null || true
+          )
+          while IFS= read -r f; do TARGETS+=("$f"); done < <( \
+            ls "$CACHE_ROOT"/flutter_blue_plus-*/android/build.gradle 2>/dev/null || true
+          )
 
-            # اگر فایل settings.gradle کَسِ پلاگین نیاز به pluginManagement داشته باشد، رها می‌کنیم (اکثراً لازم نیست)
+          if [ ${#TARGETS[@]} -eq 0 ]; then
+            echo "ℹ️ No flutter_blue_plus* build.gradle files found to patch."
+          fi
 
-            # تزریق dev.flutter.flutter-gradle-plugin در صورت نبود
-            if ! grep -q "dev.flutter.flutter-gradle-plugin" "$f"; then
-              awk 'BEGIN{ins=0}
-                   NR==1{print "plugins { id \"com.android.library\"; id \"dev.flutter.flutter-gradle-plugin\" }"; ins=1}
-                   {print $0}' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+          for F in "${TARGETS[@]}"; do
+            echo "🔧 Patching: $F"
+
+            # بکاپ
+            cp "$F" "$F.bak"
+
+            # اگر ابتدای فایل plugins DSL ندارد، اضافه نمی‌کنیم؛ فقط جایگزینی انجام می‌دهیم
+            # جایگزینی ارجاعات flutter.* با مقادیر ثابت امن
+            sed -i 's/compileSdkVersion[[:space:]]\+flutter\.[^)\n]*/compileSdkVersion 34/g' "$F"
+            sed -i 's/targetSdkVersion[[:space:]]\+flutter\.[^)\n]*/targetSdkVersion 34/g' "$F"
+            sed -i 's/minSdkVersion[[:space:]]\+flutter\.[^)\n]*/minSdkVersion 21/g' "$F"
+            sed -i 's/ndkVersion[[:space:]]\+flutter\.[^)\n]*/ndkVersion "25.1.8937393"/g' "$F"
+
+            # هر خط باقی‌مانده که شامل flutter. باشد را کامنت کن تا Gradle ایراد نگیرد
+            sed -i 's/^\([[:space:]]*\)\(.*flutter\..*\)$/\1\/\/ \2/g' "$F"
+
+            # اطمینان از وجود block android و compileSdk (اگر نبود، یک خط compileSdkVersion 34 تزریق می‌کنیم)
+            if ! grep -q "compileSdkVersion" "$F"; then
+              awk '
+                /android[[:space:]]*\{/ && !ins { print; print "    compileSdkVersion 34"; ins=1; next }
+                { print }
+              ' "$F" > "$F.tmp" && mv "$F.tmp" "$F"
             fi
 
-            # جایگزینی ارجاع‌های flutter.*
-            sed -i 's/compileSdkVersion[[:space:]]\+flutter\.[^)\n]*/compileSdkVersion 34/g' "$f"
-            sed -i 's/targetSdkVersion[[:space:]]\+flutter\.[^)\n]*/targetSdkVersion 34/g' "$f"
-            sed -i 's/minSdkVersion[[:space:]]\+flutter\.[^)\n]*/minSdkVersion 21/g' "$f"
-            sed -i 's/ndkVersion[[:space:]]\+flutter\.[^)\n]*/ndkVersion "25.1.8937393"/g' "$f"
-
-            # برخی پلاگین‌ها داخل android { … }، property ناشناخته‌ای به نام flutter.* می‌گذارند
-            # خط‌های باقی‌مانده محتمل را کامنت می‌کنیم تا Gradle خطا ندهد
-            sed -i 's/^\([[:space:]]*\)\(.*flutter\..*\)$/\1\/\/ \2/g' "$f"
+            echo "✅ Patched $F"
           done
-          echo "✅ Plugins patched."
 
+      # ساخت ریلیز
       - name: Build APK (release)
         working-directory: ${{ matrix.app.dir }}
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME_17_X64 }}
         run: |
           flutter build apk --release
           ls -lah build/app/outputs/flutter-apk
