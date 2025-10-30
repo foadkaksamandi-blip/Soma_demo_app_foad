@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "Soma_demo_app_foad/buyer-app/**"
-      - "Soma_demo_app_foad/merchant-app/**"
+      - "Soma_demo_app_foad/**"
       - ".github/workflows/flutter_build.yml"
 
 jobs:
@@ -14,10 +13,10 @@ jobs:
     strategy:
       matrix:
         app:
-          - name: buyer_app
+          - id: buyer
             dir: Soma_demo_app_foad/buyer-app
             artifact: buyer-app-release.apk
-          - name: merchant_app
+          - id: merchant
             dir: Soma_demo_app_foad/merchant-app
             artifact: merchant-app-release.apk
 
@@ -40,32 +39,34 @@ jobs:
 
       - name: Verify pubspec exists
         run: |
-          test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found at ${{ matrix.app.dir }}" && exit 1)
+          test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found" && exit 1)
 
       - name: Regenerate Android scaffold (safe mode)
         working-directory: ${{ matrix.app.dir }}
         run: |
-          flutter create --platforms android --org ir.soma.demo --project-name ${{ matrix.app.name }} --overwrite
+          APP_NAME="${{ matrix.app.id }}_app"
+          flutter create --platforms android --org ir.soma.demo --project-name ${APP_NAME} --overwrite
           chmod +x android/gradlew
+          echo "✅ Android scaffold regenerated for ${APP_NAME}"
 
       - name: Get dependencies
         working-directory: ${{ matrix.app.dir }}
         run: flutter pub get
 
-      - name: Patch compileSdkVersion for plugins
+      - name: Ensure compileSdkVersion for Flutter plugins
         shell: bash
         run: |
           CACHE_DIR="${PUB_CACHE:-$HOME/.pub-cache}/hosted"
-          echo "Checking Flutter plugin cache at: $CACHE_DIR"
+          echo "🔍 Checking Flutter plugin cache at: $CACHE_DIR"
           if [ -d "$CACHE_DIR" ]; then
             find "$CACHE_DIR" -path "*/android/build.gradle" -print0 | while IFS= read -r -d '' f; do
               if ! grep -q "compileSdkVersion" "$f"; then
                 echo -e "\nandroid { compileSdkVersion 34 }\n" >> "$f"
-                echo "Patched: $f"
+                echo "✅ Patched: $f"
               fi
             done
           else
-            echo "No Flutter cache found, skipping patch."
+            echo "⚠️ No Flutter cache found, skipping patch."
           fi
 
       - name: Build APK (release)
@@ -80,13 +81,13 @@ jobs:
         if: success()
         working-directory: ${{ matrix.app.dir }}
         run: |
-          mkdir -p $GITHUB_WORKSPACE/artifacts/${{ matrix.app.name }}
-          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/artifacts/${{ matrix.app.name }}/${{ matrix.app.artifact }}
+          mkdir -p $GITHUB_WORKSPACE/artifacts/${{ matrix.app.id }}
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/artifacts/${{ matrix.app.id }}/${{ matrix.app.artifact }}
 
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.app.name }}.apk
-          path: artifacts/${{ matrix.app.name }}/${{ matrix.app.artifact }}
+          name: ${{ matrix.app.id }}.apk
+          path: artifacts/${{ matrix.app.id }}/${{ matrix.app.artifact }}
           if-no-files-found: error
