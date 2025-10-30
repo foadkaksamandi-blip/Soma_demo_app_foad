@@ -1,17 +1,4 @@
-// === Flutter standard settings.gradle (Flutter 3.x) ===
 pluginManagement {
-    def flutterSdkPath = System.getenv("FLUTTER_SDK")
-    if (flutterSdkPath == null) {
-        def localProperties = new Properties()
-        def localPropertiesFile = new File(rootDir, "local.properties")
-        if (localPropertiesFile.exists()) {
-            localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
-            flutterSdkPath = localProperties.getProperty("flutter.sdk")
-        }
-    }
-    assert flutterSdkPath != null : "Flutter SDK not found. Define location with flutter.sdk in local.properties or set FLUTTER_SDK env var."
-
-    includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
     repositories {
         google()
         mavenCentral()
@@ -19,34 +6,13 @@ pluginManagement {
     }
 }
 
-plugins {
-    id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.1.1" apply false
-    id "com.android.library"    version "8.1.1" apply false
-    id "org.jetbrains.kotlin.android" version "1.9.10" apply false
-}
-
-include(":app")
-
-// === PATCH for flutter_bluetooth_serial (AGP 8.x) ===
-// 1) حذف خاصیت package از AndroidManifest.xml لایبرری (دیگه مجاز نیست)
-// 2) تزریق namespace برای لایبرری
-gradle.beforeProject { project ->
-    if (project.name == "flutter_bluetooth_serial") {
-        // حذف package="..." از مانیفست لایبرری
-        def manifestFile = new File(project.projectDir, "src/main/AndroidManifest.xml")
-        if (manifestFile.exists()) {
-            def txt = manifestFile.getText("UTF-8")
-            def newTxt = txt.replaceAll(/package="[^"]*"/, "")
-            if (newTxt != txt) {
-                manifestFile.write(newTxt, "UTF-8")
-            }
-        }
-        // تزریق namespace اگر تعریف نشده باشد
-        project.plugins.withId("com.android.library") {
-            if (!project.android.hasProperty("namespace") || !project.android.namespace) {
-                project.android.namespace = "com.soma.buyer.bluetooth"
-            }
-        }
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
     }
 }
+
+rootProject.name = "buyer_app"
+include(":app")
