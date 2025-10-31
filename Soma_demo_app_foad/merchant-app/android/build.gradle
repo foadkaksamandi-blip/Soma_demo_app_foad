@@ -1,24 +1,9 @@
-// Project-level build.gradle (merchant-app)
 buildscript {
-    ext.kotlin_version = '1.9.10' // <-- بروزرسانی برای سازگاری با پلاگین‌ها
-    repositories {
-        google()
-        mavenCentral()
-    }
+    ext.kotlin_version = '1.9.10'
+    repositories { google(); mavenCentral() }
     dependencies {
-        classpath "com.android.tools.build:gradle:8.1.1"
+        classpath 'com.android.tools.build:gradle:8.1.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
-
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-
-rootProject.buildDir = '../build'
-subprojects {
-    project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
+allprojects { repositories { google(); mavenCentral() } }
