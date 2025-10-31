@@ -1,352 +1,297 @@
-import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:nearby_connections/nearby_connections.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
-void main() => runApp(const BuyerApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const BuyerApp());
+}
 
 class BuyerApp extends StatelessWidget {
   const BuyerApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'اپ آفلاین سوما — اپ خریدار',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.green,
-        scaffoldBackgroundColor: const Color(0xFFF3F8F5),
         useMaterial3: true,
+        colorSchemeSeed: const Color(0xFF2E7D32),
+        scaffoldBackgroundColor: const Color(0xFFF3F7F4),
+        fontFamily: 'Roboto',
       ),
       home: const BuyerHomePage(),
-      debugShowCheckedModeBanner: false,
     );
   }
 }
 
-enum BalanceSource { main, subsidy, emergency, nationalCrypto }
-
 class BuyerHomePage extends StatefulWidget {
   const BuyerHomePage({super.key});
+
   @override
   State<BuyerHomePage> createState() => _BuyerHomePageState();
 }
 
 class _BuyerHomePageState extends State<BuyerHomePage> {
-  int mainBalance = 100000;
-  int subsidyBalance = 50000;
-  int emergencyBalance = 20000;
-  int nationalCryptoBalance = 300000;
+  // موجودی‌ها (دمویی – داخل دستگاه و آفلاین)
+  int balanceMain = 0;
+  int balanceSubsidy = 50000;
+  int balanceEmergency = 20000;
+  int balanceNatCrypto = 300000;
 
-  String lastTxnId = '-';
-  String lastTxnDetail = '-';
-  String lastTxnTime = '-';
+  String lastTxCode = '—';
+  String lastTxInfo = '—';
+  String lastTxTime = '—';
 
-  final Strategy strategy = Strategy.P2P_POINT_TO_POINT;
-  String myName = 'buyer_app';
-  Map<String, ConnectionInfo> endpoints = {};
-  bool isDiscovering = false;
+  // ---- Bluetooth (واقعی: اسکن BLE؛ انتقال مبلغ شبیه‌سازی) ----
+  final FlutterBluePlus _ble = FlutterBluePlus.instance;
+  bool _bleScanning = false;
+  List<ScanResult> _results = [];
 
-  Future<void> _startBTPaymentFlow() async {
-    bool locationGranted = await Nearby().checkLocationPermission();
-    if (!locationGranted) {
-      locationGranted = await Nearby().askLocationPermission();
-      if (!locationGranted) return;
+  Future<void> _scanBle() async {
+    setState(() {
+      _results = [];
+      _bleScanning = true;
+    });
+    await _ble.startScan(timeout: const Duration(seconds: 6));
+    _ble.scanResults.listen((list) {
+      setState(() => _results = list);
+    });
+    await Future.delayed(const Duration(seconds: 6));
+    await _ble.stopScan();
+    setState(() => _bleScanning = false);
+  }
+
+  Future<void> _simulateBlePayment(ScanResult r, int amount) async {
+    // اینجا فعلاً تبادل دیتا BLE را شبیه‌سازی می‌کنیم تا جریان کامل شود.
+    // پس از بیلد سبز، مرحله انتقال واقعی را اضافه می‌کنیم.
+    if (amount <= 0) return;
+    if (balanceMain < amount) {
+      _snack('موجودی اصلی کافی نیست');
+      return;
     }
-
-    final bool locEnabled = await Nearby().checkLocationEnabled();
-    if (!locEnabled) await Nearby().enableLocationServices();
-
-    setState(() => isDiscovering = true);
-
-    await Nearby().startDiscovery(
-      myName,
-      strategy,
-      onEndpointFound: (id, name, serviceId) async {
-        if (name.contains('merchant_app') || name.contains('merchant')) {
-          await Nearby().requestConnection(
-            myName,
-            id,
-            onConnectionInitiated: (id, info) async {
-              endpoints[id] = info;
-              await Nearby().acceptConnection(
-                id,
-                onPayLoadReceived: (eid, payload) async {
-                  if (payload.type == PayloadType.BYTES) {
-                    final data = jsonDecode(utf8.decode(payload.bytes!));
-                    if (data['type'] == 'req') {
-                      final ok = await _confirmDialog(
-                          'درخواست پرداخت',
-                          'فروشنده مبلغ ${data['amount']} از منبع ${data['src']} درخواست کرد. آیا تأیید می‌کنی؟');
-                      if (ok) {
-                        final success =
-                            _deductFromSource(data['amount'], data['src']);
-                        final txnId = _genTxnId('BT');
-                        final ack = {
-                          'type': 'ack',
-                          'ok': success,
-                          'txnId': txnId,
-                          'time': DateTime.now().toIso8601String(),
-                          'src': data['src'],
-                          'amount': data['amount']
-                        };
-                        Nearby().sendBytesPayload(
-                            id,
-                            Uint8List.fromList(
-                                utf8.encode(jsonEncode(ack))));
-                        if (success) {
-                          _setLast(txnId,
-                              'بلوتوث / ${data['src']} / ${data['amount']}');
-                        }
-                      } else {
-                        Nearby().sendBytesPayload(
-                            id,
-                            Uint8List.fromList(utf8.encode(
-                                jsonEncode({'type': 'ack', 'ok': false}))));
-                      }
-                    }
-                  }
-                },
-                onPayloadTransferUpdate: (a, b) {},
-              );
-            },
-            onConnectionResult: (id, status) {},
-            onDisconnected: (id) => endpoints.remove(id),
-          );
-        }
-      },
-      onEndpointLost: (id) {},
-    );
+    setState(() {
+      balanceMain -= amount;
+      final code = 'TXN-${Random().nextInt(900000) + 100000}';
+      lastTxCode = code;
+      lastTxInfo = '$amount / بلوتوث / اصلی → ${r.device.platformName.isNotEmpty ? r.device.platformName : r.device.remoteId.str}';
+      lastTxTime = DateTime.now().toString();
+    });
+    _snack('پرداخت بلوتوث (نمایشی) ثبت شد');
   }
 
-  bool _deductFromSource(int amount, String src) {
-    bool success = false;
-    setState(() {
-      switch (src) {
-        case 'main':
-          if (mainBalance >= amount) {
-            mainBalance -= amount;
-            success = true;
-          }
-          break;
-        case 'subsidy':
-          if (subsidyBalance >= amount) {
-            subsidyBalance -= amount;
-            success = true;
-          }
-          break;
-        case 'emergency':
-          if (emergencyBalance >= amount) {
-            emergencyBalance -= amount;
-            success = true;
-          }
-          break;
-        case 'ncrypto':
-          if (nationalCryptoBalance >= amount) {
-            nationalCryptoBalance -= amount;
-            success = true;
-          }
-          break;
+  // ---- QR (واقعی: اسکن با دوربین) ----
+  Future<void> _payWithQr() async {
+    final payload = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const _QrScanPage()),
+    );
+    if (payload == null) return;
+
+    // قالب ساده: SOMA|AMT|TS|RAND
+    try {
+      final parts = payload.split('|');
+      if (parts.length < 4 || parts[0] != 'SOMA') {
+        _snack('فرمت QR نامعتبر است');
+        return;
       }
-    });
-    return success;
+      final amount = int.tryParse(parts[1]) ?? 0;
+      if (amount <= 0) {
+        _snack('مبلغ نامعتبر');
+        return;
+      }
+      if (balanceMain < amount) {
+        _snack('موجودی اصلی کافی نیست');
+        return;
+      }
+      setState(() {
+        balanceMain -= amount;
+        lastTxCode = 'TXN-${Random().nextInt(900000) + 100000}';
+        lastTxInfo = '$amount / QR / اصلی';
+        lastTxTime = DateTime.now().toString();
+      });
+      _snack('پرداخت QR انجام شد');
+    } catch (_) {
+      _snack('پردازش QR ناموفق بود');
+    }
   }
 
-  String _genTxnId(String prefix) {
-    final n = DateTime.now().millisecondsSinceEpoch % 999999;
-    return '${prefix}-${n.toString().padLeft(6, '0')}';
-  }
-
-  void _setLast(String id, String detail) {
-    setState(() {
-      lastTxnId = id;
-      lastTxnDetail = detail;
-      lastTxnTime = DateTime.now().toString().split('.').first;
-    });
-  }
-
-  Future<bool> _confirmDialog(String title, String msg) async {
-    bool ok = false;
-    await showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: Text(msg),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('لغو')),
-          FilledButton(
-              onPressed: () {
-                ok = true;
-                Navigator.pop(context);
-              },
-              child: const Text('تأیید')),
-        ],
-      ),
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
     );
-    return ok;
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = 'اپ آفلاین سوما — خریدار';
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _balanceCard('موجودی اصلی', mainBalance),
-          Row(children: [
-            Expanded(child: _balanceCard('یارانه‌ای', subsidyBalance)),
-            const SizedBox(width: 12),
-            Expanded(child: _balanceCard('اضطراری ملی', emergencyBalance)),
-          ]),
-          _balanceCard('رمزارز ملی', nationalCryptoBalance),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-              child: FilledButton(
-                onPressed: _startBTPaymentFlow,
-                child: const Text('پرداخت با بلوتوث'),
-              ),
+    final cs = Theme.of(context).colorScheme;
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('اپ آفلاین سوما — اپ خریدار'),
+          centerTitle: false,
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _balanceTile('موجودی اصلی', balanceMain),
+                _balanceTile('موجودی یارانه‌ای', balanceSubsidy),
+                _balanceTile('موجودی اضطراری ملی', balanceEmergency),
+                _balanceTile('موجودی رمزارز ملی', balanceNatCrypto),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.tonal(
-                onPressed: () {
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => BuyerQrFlow(onFinish: (amount, src) {
-                                _deductFromSource(amount, src);
-                                _setLast(_genTxnId('TXN'),
-                                    'QR / $src / $amount');
-                              })));
-                },
-                child: const Text('پرداخت با QR'),
-              ),
+
+            const SizedBox(height: 16),
+
+            // دکمه‌های پرداخت
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => _payWithQr(),
+                    child: const Text('پرداخت با QR'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.tonal(
+                    onPressed: _bleScanning ? null : _scanBle,
+                    child: Text(_bleScanning ? 'در حال جستجو…' : 'پرداخت با بلوتوث'),
+                  ),
+                ),
+              ],
             ),
-          ]),
-          const SizedBox(height: 16),
-          _lastTxn(),
-        ]),
-      ),
-    );
-  }
 
-  Widget _balanceCard(String title, int value) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.green.shade200),
-          borderRadius: BorderRadius.circular(12)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontSize: 16)),
-        const SizedBox(height: 6),
-        Text('$value',
-            style:
-                const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-      ]),
-    );
-  }
-
-  Widget _lastTxn() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.green.shade200),
-          borderRadius: BorderRadius.circular(12)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('آخرین تراکنش',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Text('کد: $lastTxnId'),
-        Text('جزئیات: $lastTxnDetail'),
-        Text('زمان: $lastTxnTime'),
-      ]),
-    );
-  }
-}
-
-class BuyerQrFlow extends StatefulWidget {
-  final void Function(int amount, String src) onFinish;
-  const BuyerQrFlow({super.key, required this.onFinish});
-  @override
-  State<BuyerQrFlow> createState() => _BuyerQrFlowState();
-}
-
-class _BuyerQrFlowState extends State<BuyerQrFlow> {
-  int? amount;
-  String src = 'main';
-  bool scannedMerchant = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('پرداخت با QR')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child:
-            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          DropdownButtonFormField<String>(
-            value: src,
-            items: const [
-              DropdownMenuItem(value: 'main', child: Text('موجودی اصلی')),
-              DropdownMenuItem(value: 'subsidy', child: Text('یارانه‌ای')),
-              DropdownMenuItem(value: 'emergency', child: Text('اضطراری ملی')),
-              DropdownMenuItem(value: 'ncrypto', child: Text('رمزارز ملی')),
-            ],
-            onChanged: (v) => setState(() => src = v!),
-            decoration: const InputDecoration(labelText: 'منبع پرداخت'),
-          ),
-          const SizedBox(height: 12),
-          if (!scannedMerchant)
-            Expanded(
-              child: MobileScanner(
-                onDetect: (capture) {
-                  final code = capture.barcodes.first.rawValue;
-                  if (code != null) {
-                    final data = jsonDecode(code);
-                    if (data['type'] == 'ask') {
-                      amount = data['amount'];
-                      setState(() => scannedMerchant = true);
-                    }
-                  }
-                },
-              ),
-            )
-          else
-            Expanded(
-              child: Center(
+            if (_results.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.outlineVariant),
+                ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('این QR را به فروشنده نشان بده'),
-                    const SizedBox(height: 12),
-                    QrImageView(
-                      data: jsonEncode({
-                        'type': 'confirm',
-                        'amount': amount,
-                        'src': src,
-                        'time': DateTime.now().toIso8601String()
-                      }),
-                      size: 220,
+                    const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: Text('دستگاه‌های BLE نزدیک', style: TextStyle(fontWeight: FontWeight.w600)),
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                        onPressed: () {
-                          widget.onFinish(amount!, src);
-                          Navigator.pop(context);
+                    const Divider(height: 1),
+                    for (final r in _results.take(8))
+                      ListTile(
+                        title: Text(r.device.platformName.isNotEmpty ? r.device.platformName : 'دستگاه ناشناس'),
+                        subtitle: Text(r.device.remoteId.str),
+                        trailing: Text('RSSI ${r.rssi}'),
+                        onTap: () async {
+                          // مبلغ نمونه برای پرداخت نمایشی بلوتوث
+                          await _simulateBlePayment(r, 100000);
                         },
-                        child: const Text('پایان و بازگشت')),
+                      ),
                   ],
                 ),
               ),
+            ],
+
+            const SizedBox(height: 16),
+
+            // آخرین تراکنش
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cs.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('آخرین تراکنش', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Text('کد: $lastTxCode'),
+                  Text('جزئیات: $lastTxInfo'),
+                  Text('زمان: $lastTxTime'),
+                ],
+              ),
             ),
-        ]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _balanceTile(String title, int value) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: (MediaQuery.of(context).size.width - 16 * 2 - 12) / 2,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title),
+          const SizedBox(height: 8),
+          Text(
+            value.toString(),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QrScanPage extends StatelessWidget {
+  const _QrScanPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = MobileScannerController(
+      detectionSpeed: DetectionSpeed.noDuplicates,
+      formats: const [BarcodeFormat.qrCode],
+    );
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('اسکن QR')),
+        body: Stack(
+          children: [
+            MobileScanner(
+              controller: controller,
+              onDetect: (capture) {
+                final codes = capture.barcodes;
+                if (codes.isNotEmpty && codes.first.rawValue != null) {
+                  Navigator.of(context).pop<String>(codes.first.rawValue!);
+                }
+              },
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'دوربین را به سوی QR فروشنده بگیرید',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        backgroundColor: Colors.black54,
+                        color: Colors.white,
+                      ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
