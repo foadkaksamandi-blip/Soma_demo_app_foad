@@ -1,37 +1,43 @@
 plugins {
     id 'com.android.application'
-    id 'kotlin-android'
+    id 'org.jetbrains.kotlin.android'
 }
 
 android {
-    namespace 'com.soma.buyer'
     compileSdk 36
 
     defaultConfig {
-        applicationId "com.soma.buyer"
+        applicationId "com.yourorg.buyer_app"
         minSdk 23
         targetSdk 36
         versionCode 1
-        versionName "1.0.0"
-        multiDexEnabled true
+        versionName "0.0.1"
     }
 
     buildTypes {
         release {
+            signingConfig signingConfigs.debug
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
-        debug { minifyEnabled false }
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = '17' }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    namespace 'com.yourorg.buyer_app'
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.10"
-    implementation 'androidx.multidex:multidex:2.0.1'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.8.22"
+    implementation 'androidx.core:core-ktx:1.10.1'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
 }
