@@ -1,136 +1,136 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  Intl.defaultLocale = 'fa_IR';
-  runApp(const MerchantApp());
+  runApp(const SomaMerchantApp());
 }
 
-class MerchantApp extends StatelessWidget {
-  const MerchantApp({super.key});
+const _green = Color(0xFF2E7D32);
+
+class SomaMerchantApp extends StatelessWidget {
+  const SomaMerchantApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SOMA Merchant',
+      title: 'اپ آفلاین سوما — اپ فروشنده',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
-        scaffoldBackgroundColor: const Color(0xFFF2FBF5),
+        colorScheme: ColorScheme.fromSeed(seedColor: _green, brightness: Brightness.light),
+        scaffoldBackgroundColor: const Color(0xFFF3F7F5),
+        useMaterial3: true,
       ),
-      home: const MerchantHome(),
+      home: const MerchantHomePage(),
     );
   }
 }
 
-class MerchantHome extends StatefulWidget {
-  const MerchantHome({super.key});
+class MerchantHomePage extends StatefulWidget {
+  const MerchantHomePage({super.key});
+
   @override
-  State<MerchantHome> createState() => _MerchantHomeState();
+  State<MerchantHomePage> createState() => _MerchantHomePageState();
 }
 
-class _MerchantHomeState extends State<MerchantHome> {
-  final _fmt = DateFormat('yyyy/MM/dd HH:mm');
-  int _balance = 0;
-  String _lastTx = '-';
-  String _lastTime = '-';
+class _MerchantHomePageState extends State<MerchantHomePage> {
+  int balance = 0;
+  String lastTxnId = '—';
+  DateTime? lastTxnTime;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final sp = await SharedPreferences.getInstance();
+  void _receive(int amount) {
     setState(() {
-      _balance = sp.getInt('merchant.balance') ?? 0;
-      _lastTx = sp.getString('merchant.lastTx') ?? '-';
-      _lastTime = sp.getString('merchant.lastTime') ?? '-';
+      balance += amount;
+      lastTxnId = 'RCV-${DateTime.now().millisecondsSinceEpoch % 1000000}';
+      lastTxnTime = DateTime.now();
     });
   }
 
-  Future<void> _persist() async {
-    final sp = await SharedPreferences.getInstance();
-    await sp.setInt('merchant.balance', _balance);
-    await sp.setString('merchant.lastTx', _lastTx);
-    await sp.setString('merchant.lastTime', _lastTime);
+  Future<void> _goBluetooth() async {
+    final res = await Navigator.of(context).push<int>(
+      MaterialPageRoute(builder: (_) => const MerchantBluetoothPage()),
+    );
+    if (res != null) _receive(res);
   }
 
-  Future<void> _applyCredit(int amount, String txid) async {
-    setState(() {
-      _balance += amount;
-      _lastTx = txid;
-      _lastTime = _fmt.format(DateTime.now());
-    });
-    await _persist();
-  }
-
-  void _openBt() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) {
-      return BtReceivePage(onSuccess: (amount, txid) async {
-        await _applyCredit(amount, 'BT-$txid');
-      });
-    }));
-  }
-
-  void _openQr() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) {
-      return QrReceivePage(onSuccess: (amount, txid) async {
-        await _applyCredit(amount, 'QR-$txid');
-      });
-    }));
+  Future<void> _goQR() async {
+    final res = await Navigator.of(context).push<int>(
+      MaterialPageRoute(builder: (_) => const MerchantQRPage()),
+    );
+    if (res != null) _receive(res);
   }
 
   @override
   Widget build(BuildContext context) {
+    final title = 'اپ آفلاین سوما — اپ فروشنده';
     return Scaffold(
       appBar: AppBar(
-        title: const Text('اپ آفلاین سوما — اپ فروشنده', style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
+        title: Text(title, style: const TextStyle(color: Colors.black)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            elevation: 0.6,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('موجودی', style: TextStyle(fontWeight: FontWeight.bold)),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _green.withOpacity(.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('موجودی', style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                Text('$_balance', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-              ]),
+                Text('$balance', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
           Row(
             children: [
-              Expanded(child: ElevatedButton(onPressed: _openBt, child: const Text('دریافت از بلوتوث'))),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _green,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _goBluetooth,
+                  child: const Text('دریافت از بلوتوث', style: TextStyle(color: Colors.white, fontSize: 16)),
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: ElevatedButton(onPressed: _openQr, child: const Text('دریافت از QR'))),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _green.withOpacity(.2),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _goQR,
+                  child: const Text('دریافت از QR', style: TextStyle(color: Colors.black87, fontSize: 16)),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 0.6,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('شماره تراکنش', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _green.withOpacity(.25)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('آخرین تراکنش دریافت‌شده', style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
-                Text(_lastTx, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                Text('زمان: $_lastTime'),
-              ]),
+                Text('کد: $lastTxnId'),
+                Text('زمان: ${lastTxnTime == null ? "—" : lastTxnTime!.toLocal()}'),
+              ],
             ),
           ),
         ],
@@ -139,209 +139,161 @@ class _MerchantHomeState extends State<MerchantHome> {
   }
 }
 
-// ============== BT RECEIVE ==============
-class BtReceivePage extends StatefulWidget {
-  final Future<void> Function(int amount, String txid) onSuccess;
-  const BtReceivePage({super.key, required this.onSuccess});
+// ————————————— صفحات دریافت فروشنده —————————————
 
+class MerchantBluetoothPage extends StatefulWidget {
+  const MerchantBluetoothPage({super.key});
   @override
-  State<BtReceivePage> createState() => _BtReceivePageState();
+  State<MerchantBluetoothPage> createState() => _MerchantBluetoothPageState();
 }
 
-class _BtReceivePageState extends State<BtReceivePage> {
-  final _amountCtrl = TextEditingController();
-  bool _secure = false;
-  String _status = 'در انتظار اتصال خریدار';
-  List<BluetoothDevice> _devices = [];
-  BluetoothDevice? _selected;
+class _MerchantBluetoothPageState extends State<MerchantBluetoothPage> {
+  bool secure = false;
+  final TextEditingController amount = TextEditingController();
 
-  Future<void> _advertiseAndScan() async {
-    setState(() {
-      _status = 'اسکن برای اتصال...';
-      _devices = [];
-      _selected = null;
-      _secure = false;
-    });
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
-    final results = await FlutterBluePlus.onScanResults.first;
-    await FlutterBluePlus.stopScan();
-    setState(() {
-      _devices = results.map((e) => e.device).toList();
-      _status = _devices.isEmpty ? 'چیزی پیدا نشد' : 'دستگاه را انتخاب کنید';
-    });
-  }
-
-  Future<void> _connect(BluetoothDevice d) async {
-    setState(() => _status = 'اتصال...');
-    try {
-      await d.connect(timeout: const Duration(seconds: 5));
-    } catch (_) {}
-    setState(() {
-      _selected = d;
-      _secure = true; // شبیه‌سازی امن
-      _status = 'اتصال ایمن برقرار شد';
-    });
-  }
-
-  Future<void> _accept() async {
-    if (!_secure) return;
-    final amt = int.tryParse(_amountCtrl.text.trim()) ?? 0;
-    if (amt <= 0) {
-      setState(() => _status = 'مبلغ نامعتبر');
-      return;
-    }
-    final txid = const Uuid().v4().substring(0, 8);
-    await widget.onSuccess(amt, txid);
-    if (mounted) {
-      setState(() => _status = 'تراکنش موفق: BT-$txid');
-      await Future.delayed(const Duration(milliseconds: 800));
-      Navigator.pop(context);
-    }
+  @override
+  void dispose() {
+    amount.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('دریافت با بلوتوث')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          ElevatedButton(onPressed: _advertiseAndScan, child: const Text('آماده‌سازی و اسکن')),
-          const SizedBox(height: 8),
-          if (_devices.isNotEmpty)
-            DropdownButton<BluetoothDevice>(
-              isExpanded: true,
-              value: _selected,
-              hint: const Text('انتخاب دستگاه خریدار'),
-              items: _devices
-                  .map((d) => DropdownMenuItem(value: d, child: Text(d.platformName.isEmpty ? d.remoteId.str : d.platformName)))
-                  .toList(),
-              onChanged: (d) => _connect(d!),
-            ),
-          const SizedBox(height: 8),
-          Row(children: [
-            Icon(_secure ? Icons.verified_user : Icons.lock_outline, color: _secure ? Colors.green : Colors.grey),
-            const SizedBox(width: 8),
-            Text(_secure ? 'اتصال ایمن' : 'در انتظار اتصال ایمن'),
-          ]),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _amountCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'مبلغ خرید', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _accept, child: const Text('تأیید و دریافت'))),
-          const SizedBox(height: 12),
-          Text('وضعیت: $_status'),
-        ]),
-      ),
-    );
-  }
-}
-
-// ============== QR RECEIVE ==============
-class QrReceivePage extends StatefulWidget {
-  final Future<void> Function(int amount, String txid) onSuccess;
-  const QrReceivePage({super.key, required this.onSuccess});
-
-  @override
-  State<QrReceivePage> createState() => _QrReceivePageState();
-}
-
-class _QrReceivePageState extends State<QrReceivePage> {
-  String _status = 'یک QR درخواست را اسکن کنید یا مبلغ بسازید';
-  String? _confirmPayload; // برای نمایش تأیید به خریدار
-  int _amount = 0;
-
-  Future<void> _scanReq() async {
-    final code = await Navigator.push<String>(context, MaterialPageRoute(builder: (_) => const _ScanView()));
-    if (code == null) return;
-    try {
-      final data = jsonDecode(code);
-      if (data['type'] == 'PAY_REQ') {
-        setState(() {
-          _amount = data['amount'] ?? 0;
-          _status = 'درخواست دریافت شد: $_amount';
-        });
-        _buildConfirm();
-      } else {
-        setState(() => _status = 'QR مناسب نیست');
-      }
-    } catch (_) {
-      setState(() => _status = 'QR نامعتبر');
-    }
-  }
-
-  void _buildConfirm() {
-    final txid = const Uuid().v4().substring(0, 8);
-    final payload = jsonEncode({'type': 'PAY_CONF', 'amount': _amount, 'txid': txid});
-    setState(() => _confirmPayload = payload);
-  }
-
-  Future<void> _finalize() async {
-    if (_amount <= 0) return;
-    final txid = const Uuid().v4().substring(0, 8);
-    await widget.onSuccess(_amount, txid);
-    if (mounted) {
-      setState(() => _status = 'تراکنش موفق: QR-$txid');
-      await Future.delayed(const Duration(milliseconds: 800));
-      Navigator.pop(context);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final green = Theme.of(context).colorScheme.primary;
-    return Scaffold(
-      appBar: AppBar(title: const Text('دریافت با QR')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          ElevatedButton(
+            onPressed: () async {
+              await Future.delayed(const Duration(milliseconds: 800));
+              setState(() => secure = true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _green,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text('شروع و جفت‌سازی امن', style: TextStyle(color: Colors.white)),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: ElevatedButton(onPressed: _scanReq, child: const Text('اسکن QR (درخواست)'))),
-              const SizedBox(width: 12),
-              Expanded(child: ElevatedButton(onPressed: _finalize, child: const Text('تأیید دستی و دریافت'))),
+              Icon(secure ? Icons.lock : Icons.lock_open, color: secure ? Colors.green : Colors.red),
+              const SizedBox(width: 8),
+              Text(secure ? 'اتصال ایمن برقرار شد' : 'در انتظار اتصال'),
             ],
           ),
-          const SizedBox(height: 12),
-          if (_confirmPayload != null)
-            Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(children: [
-                  Text('QR تأیید برای خریدار', style: TextStyle(color: green, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  QrImageView(data: _confirmPayload!, size: 220),
-                  const SizedBox(height: 6),
-                  const Text('خریدار این QR را اسکن می‌کند'),
-                ]),
-              ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: amount,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'مبلغ دریافتی از خریدار',
+              border: OutlineInputBorder(),
             ),
-          const SizedBox(height: 8),
-          Text('وضعیت: $_status'),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: secure && (int.tryParse(amount.text) ?? 0) > 0
+                ? () => Navigator.of(context).pop(int.parse(amount.text))
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _green,
+              disabledBackgroundColor: Colors.grey.shade300,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text('تأیید دریافت', style: TextStyle(color: Colors.white)),
+          ),
         ],
       ),
     );
   }
 }
 
-class _ScanView extends StatelessWidget {
-  const _ScanView();
+class MerchantQRPage extends StatefulWidget {
+  const MerchantQRPage({super.key});
+  @override
+  State<MerchantQRPage> createState() => _MerchantQRPageState();
+}
+
+class _MerchantQRPageState extends State<MerchantQRPage> {
+  final TextEditingController amount = TextEditingController();
+  bool shown = false;
+  bool scannedBack = false;
+
+  @override
+  void dispose() {
+    amount.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('اسکن')),
-      body: MobileScanner(
-        onDetect: (capture) {
-          final codes = capture.barcodes;
-          if (codes.isNotEmpty) {
-            final raw = codes.first.rawValue;
-            if (raw != null) Navigator.pop(context, raw);
-          }
-        },
+      appBar: AppBar(title: const Text('دریافت با QR')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          TextField(
+            controller: amount,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'مبلغ خرید',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: () async {
+              if ((int.tryParse(amount.text) ?? 0) <= 0) return;
+              await Future.delayed(const Duration(milliseconds: 600));
+              setState(() => shown = true);
+            },
+            child: const Text('تولید QR برای نمایش به خریدار'),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(shown ? Icons.qr_code_2 : Icons.qr_code, color: Colors.black87),
+              const SizedBox(width: 8),
+              Text(shown ? 'QR روی صفحه نمایش داده شد' : 'هنوز تولید نشده'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: shown
+                ? () async {
+                    await Future.delayed(const Duration(milliseconds: 600));
+                    setState(() => scannedBack = true);
+                  }
+                : null,
+            child: const Text('تأیید اسکن متقابل از خریدار'),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(scannedBack ? Icons.check_circle : Icons.hourglass_empty,
+                  color: scannedBack ? Colors.green : Colors.black54),
+              const SizedBox(width: 8),
+              Text(scannedBack ? 'اسکن دوطرفه تأیید شد' : 'در انتظار تأیید خریدار'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: scannedBack && (int.tryParse(amount.text) ?? 0) > 0
+                ? () => Navigator.of(context).pop(int.parse(amount.text))
+                : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _green,
+              disabledBackgroundColor: Colors.grey.shade300,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text('ثبت دریافت و بازگشت', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
