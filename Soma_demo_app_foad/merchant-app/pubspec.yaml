@@ -1,20 +1,25 @@
 name: merchant_app
-description: SOMA Offline Merchant App
+description: SOMA Offline Banking Demo - Merchant App
 publish_to: "none"
 
 environment:
-  sdk: ">=3.3.0 <4.0.0"
+  sdk: ">=3.5.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  qr_flutter: ^4.1.0
+
   mobile_scanner: ^6.0.11
-  nearby_connections: ^3.2.0
+  qr_flutter: ^4.1.0
+  flutter_blue_plus: ^1.32.5
+  cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/
