@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace "com.soma.buyer"
-    compileSdk 36
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.soma.buyer"
@@ -30,5 +30,5 @@ android {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
 }
