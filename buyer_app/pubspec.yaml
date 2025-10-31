@@ -1,0 +1,57 @@
+name: Build Buyer & Merchant APK (release)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [ buyer_app, merchant_app ]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.24.3'
+        channel: 'stable'
+
+    - name: Cache Flutter
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.pub-cache
+          ~/.pub-cache/hosted
+          ~/.pub-cache/hosted/pub.dartlang.org
+        key: ${{ runner.os }}-flutter-pub-${{ hashFiles('**/pubspec.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-flutter-pub-
+
+    - name: Change dir to app
+      run: |
+        cd ${{ matrix.app }}
+        flutter pub get
+
+    - name: Build APK release
+      working-directory: ${{ matrix.app }}
+      run: |
+        flutter build apk --release -v
+
+    - name: Upload artifact
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.app }}-apk
+        path: ${{ matrix.app }}/build/app/outputs/flutter-apk/*.apk
