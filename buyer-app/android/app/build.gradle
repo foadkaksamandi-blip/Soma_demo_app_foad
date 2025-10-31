@@ -1,29 +1,24 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
+    id "org.jetbrains.kotlin.android"
 }
 
 android {
-    namespace "com.foad.soma.buyer"
-    compileSdk = 36
+    namespace "com.soma.buyer"
+    compileSdk 36
 
     defaultConfig {
-        applicationId "com.foad.soma.buyer"
-        minSdk = 21
-        targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
-        multiDexEnabled true
+        applicationId "com.soma.buyer"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            shrinkResources false
-            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
-        }
-        debug {
-            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
@@ -31,22 +26,9 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    packagingOptions {
-        resources {
-            excludes += [ "META-INF/*" ]
-        }
-    }
+    kotlinOptions { jvmTarget = "17" }
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
-
-    // Bluetooth (واقعی)
-    implementation "com.github.weliem:blessed-android:2.7.1" // وابستگی ترانزیتیو flutter_blue_plus
-
-    // (باقی وابستگی‌های فلاتر توسط Gradle افزوده می‌شوند)
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.0.20"
 }
