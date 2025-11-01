@@ -5,7 +5,8 @@ import '../services/local_db.dart';
 import '../services/permissions.dart';
 
 class BluetoothReceiveScreen extends StatefulWidget {
-  const BluetoothReceiveScreen({super.key});
+  final int amount;
+  const BluetoothReceiveScreen({super.key, required this.amount});
 
   @override
   State<BluetoothReceiveScreen> createState() => _BluetoothReceiveScreenState();
@@ -89,7 +90,7 @@ class _BluetoothReceiveScreenState extends State<BluetoothReceiveScreen> {
           final wallet = m['wallet'] ?? 'main';
           final ok = await LocalDB.instance.receiveAmount(amount, wallet);
           if (ok) {
-            setState(() => _status = 'پرداخت $amount دریافت شد ✅');
+            setState(() => _status = 'پرداخت $amount تومان دریافت شد ✅');
           } else {
             setState(() => _status = 'خطا در ثبت پرداخت.');
           }
@@ -102,19 +103,22 @@ class _BluetoothReceiveScreenState extends State<BluetoothReceiveScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('دریافت با بلوتوث (آفلاین)')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Text(_status, style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _scanning ? null : _startPairing,
-              child: const Text('شروع و جفت‌سازی امن'),
-            ),
-          ],
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('دریافت با بلوتوث (آفلاین)')),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Text(_status, style: const TextStyle(fontSize: 16)),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _scanning ? null : _startPairing,
+                child: const Text('شروع و جفت‌سازی امن'),
+              ),
+            ],
+          ),
         ),
       ),
     );
