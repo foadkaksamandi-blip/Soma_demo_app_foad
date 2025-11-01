@@ -1,5 +1,5 @@
-name: merchant_app
-description: Soma offline demo — merchant
+name: buyer_app
+description: Soma offline demo — buyer
 publish_to: "none"
 version: 1.0.0+1
 
