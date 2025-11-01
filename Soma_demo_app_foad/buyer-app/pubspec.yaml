@@ -1,20 +1,29 @@
 name: buyer_app
-description: SOMA Offline — Buyer demo
+description: Soma demo buyer app
 publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.5.0 <4.0.0"
+  sdk: ">=2.18.0 <4.0.0"
+  flutter: ">=3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.6
+
+  cupertino_icons: ^1.0.2
+
+  # demo plugins (install latest compatible)
+  mobile_scanner: any
+  qr_flutter: any
+  nearby_connections: any
+  permission_handler: any
+  flutter_blue_plus: any
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^2.0.0
 
 flutter:
   uses-material-design: true
