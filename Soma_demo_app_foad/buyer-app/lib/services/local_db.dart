@@ -1,46 +1,69 @@
 import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 
+/// پایگاه دادهٔ محلی ساده برای دمو
+/// کلیدها: wallet_main, wallet_subsidy, wallet_emergency, wallet_crypto
 class LocalDB {
   LocalDB._();
-  static final instance = LocalDB._();
+  static final LocalDB instance = LocalDB._();
 
-  int _main = 2000000;
-  int _subsidy = 1500000;
-  int _emergency = 800000;
-  int _cbdc = 0;
+  SharedPreferences? _sp;
 
-  Future<int> getBalance({String wallet = 'main'}) async {
+  Future<void> _ensure() async {
+    _sp ??= await SharedPreferences.getInstance();
+    // مقادیر اولیه اگر وجود ندارند
+    _sp!.setInt('wallet_main', _sp!.getInt('wallet_main') ?? 100000);
+    _sp!.setInt('wallet_subsidy', _sp!.getInt('wallet_subsidy') ?? 50000);
+    _sp!.setInt('wallet_emergency', _sp!.getInt('wallet_emergency') ?? 20000);
+    _sp!.setInt('wallet_crypto', _sp!.getInt('wallet_crypto') ?? 300000);
+  }
+
+  int _getBalance(String wallet) {
     switch (wallet) {
-      case 'subsidy': return _subsidy;
-      case 'emergency': return _emergency;
-      case 'cbdc': return _cbdc;
-      default: return _main;
+      case 'subsidy':
+        return _sp!.getInt('wallet_subsidy') ?? 0;
+      case 'emergency':
+        return _sp!.getInt('wallet_emergency') ?? 0;
+      case 'crypto':
+        return _sp!.getInt('wallet_crypto') ?? 0;
+      case 'main':
+      default:
+        return _sp!.getInt('wallet_main') ?? 0;
     }
   }
 
-  Future<void> addBalance(int v, {String wallet='main'}) async {
-    switch (wallet) {
-      case 'subsidy': _subsidy += v; break;
-      case 'emergency': _emergency += v; break;
-      case 'cbdc': _cbdc += v; break;
-      default: _main += v;
-    }
-  }
+  Future<bool> spendAmount(int amount, String wallet) async {
+    await _ensure();
+    if (amount <= 0) return false;
 
-  Future<bool> spend(int v, {String wallet='main'}) async {
-    int b = await getBalance(wallet: wallet);
-    if (b < v) return false;
+    final current = _getBalance(wallet);
+    if (current < amount) return false;
+
+    final newVal = current - amount;
     switch (wallet) {
-      case 'subsidy': _subsidy -= v; break;
-      case 'emergency': _emergency -= v; break;
-      case 'cbdc': _cbdc -= v; break;
-      default: _main -= v;
+      case 'subsidy':
+        await _sp!.setInt('wallet_subsidy', newVal);
+        break;
+      case 'emergency':
+        await _sp!.setInt('wallet_emergency', newVal);
+        break;
+      case 'crypto':
+        await _sp!.setInt('wallet_crypto', newVal);
+        break;
+      case 'main':
+      default:
+        await _sp!.setInt('wallet_main', newVal);
+        break;
     }
     return true;
   }
 
-  String newTxId() {
-    final rnd = Random().nextInt(900000) + 100000;
-    return 'TX-${DateTime.now().millisecondsSinceEpoch}-$rnd';
+  Future<String> newTxId() async {
+    await _ensure();
+    final rnd = Random();
+    final id =
+        '${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}-${rnd.nextInt(1 << 20).toRadixString(16)}';
+    return id;
+    // (در دمو نیازی به ذخیره تاریخچه نیست؛ صرفاً شناسه برمی‌گردد)
   }
 }
