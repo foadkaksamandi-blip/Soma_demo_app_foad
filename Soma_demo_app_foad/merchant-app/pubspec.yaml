@@ -1,22 +1,28 @@
 name: merchant_app
-description: Soma Offline Demo — Merchant
-publish_to: "none"
+description: Soma Offline Merchant App (QR + Bluetooth Real Mode)
+publish_to: 'none'
+version: 1.0.0+1
+
 environment:
-  sdk: ">=3.3.0 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
-  flutter: { sdk: flutter }
-  flutter_localizations:
+  flutter:
     sdk: flutter
-  intl: ^0.19.0
-  permission_handler: ^11.3.1
-  flutter_blue_plus: ^1.31.18
+
+  cupertino_icons: ^1.0.6
+  flutter_blue_plus: ^1.31.17
+  mobile_scanner: ^3.2.0
   qr_flutter: ^4.1.0
-  mobile_scanner: ^5.1.1
+  permission_handler: ^11.3.0
+  intl: ^0.19.0
 
 dev_dependencies:
-  flutter_test: { sdk: flutter }
-  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/
