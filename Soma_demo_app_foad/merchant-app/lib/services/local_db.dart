@@ -1,40 +1,50 @@
-import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// LocalDB — نسخهٔ ساده برای دمو مرچنت
+/// - نگه‌داری موجودی هر کیف (wallet) در SharedPreferences
+/// - متدهای دریافت مبلغ (receiveAmount) و گرفتن موجودی (getBalance)
 class LocalDB {
   LocalDB._();
   static final LocalDB instance = LocalDB._();
 
-  static const _kMerchantBalance = 'merchant_balance';
-  static const _kLastTxId = 'merchant_last_tx_id';
+  SharedPreferences? _sp;
 
-  Future<SharedPreferences> get _sp async => SharedPreferences.getInstance();
-
-  Future<void> ensureDefaults() async {
-    final sp = await _sp;
-    if (!sp.containsKey(_kMerchantBalance)) {
-      await sp.setInt(_kMerchantBalance, 0);
-      await sp.setInt(_kLastTxId, 500000 + Random().nextInt(900000));
-    }
+  /// فراخوانی در اولین استفاده به صورت Lazy
+  Future<void> _ensureInit() async {
+    _sp ??= await SharedPreferences.getInstance();
   }
 
-  Future<int> balance() async {
-    final sp = await _sp;
-    return sp.getInt(_kMerchantBalance) ?? 0;
+  String _key(String wallet) => 'wallet_balance_$wallet';
+
+  /// مقدار پیش‌فرض دمو اگر قبلاً چیزی نبود
+  static const int _defaultBalance = 0;
+
+  /// دریافت موجودی فعلی یک کیف
+  Future<int> getBalance(String wallet) async {
+    await _ensureInit();
+    return _sp!.getInt(_key(wallet)) ?? _defaultBalance;
   }
 
-  Future<bool> receive_amount(int amount) async {
-    await ensureDefaults();
-    if (amount <= 0) return false;
-    final sp = await _sp;
-    final cur = sp.getInt(_kMerchantBalance) ?? 0;
-    return sp.setInt(_kMerchantBalance, cur + amount);
+  /// ست کردن موجودی
+  Future<bool> _setBalance(String wallet, int value) async {
+    await _ensureInit();
+    return _sp!.setInt(_key(wallet), value);
   }
 
-  Future<String> newTxId() async {
-    final sp = await _sp;
-    final next = (sp.getInt(_kLastTxId) ?? 0) + 1;
-    await sp.setInt(_kLastTxId, next);
-    return next.toString();
+  /// ✅ موردی که لاگ خطا می‌گرفت: این متد باید دقیقاً با همین نام وجود داشته باشد.
+  /// افزایش موجودی (مرچنت پول دریافت می‌کند)
+  Future<bool> receiveAmount(int amount, String wallet) async {
+    await _ensureInit();
+    final current = await getBalance(wallet);
+    final next = current + (amount.abs());
+    return _setBalance(wallet, next);
+  }
+
+  /// متدهای کمکی برای دمو/دیباگ
+  Future<bool> setExactBalance(String wallet, int value) => _setBalance(wallet, value);
+
+  Future<bool> resetAll({String wallet = 'main'}) async {
+    await _ensureInit();
+    return _sp!.remove(_key(wallet));
   }
 }
