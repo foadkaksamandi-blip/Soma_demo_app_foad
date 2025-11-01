@@ -1,41 +1,62 @@
-import 'dart:async';
 import 'dart:convert';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
-/// سرویس ساده برای اتصال، ارسال و دریافت پیام (UTF8) از طریق Bluetooth RFCOMM
-class BluetoothService {
-  static final BluetoothService _i = BluetoothService._();
-  BluetoothService._();
-  factory BluetoothService() => _i;
+class BuyerBluetoothService {
+  static const String kServiceUuid = "0000ffaa-0000-1000-8000-00805f9b34fb";
+  static const String kCharUuid = "0000ffab-0000-1000-8000-00805f9b34fb";
 
-  BluetoothConnection? _conn;
-  final _stream = StreamController<String>.broadcast();
+  BluetoothDevice? _device;
+  BluetoothCharacteristic? _txChar;
 
-  Stream<String> get onData => _stream.stream;
-  bool get isConnected => _conn?.isConnected ?? false;
+  Future<bool> connectFirstMerchant() async {
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 6));
+    final scanRes = await FlutterBluePlus.scanResults.first;
+    await FlutterBluePlus.stopScan();
 
-  Future<bool> connect(String address) async {
-    try {
-      _conn = await BluetoothConnection.toAddress(address);
-      _conn!.input?.listen((data) {
-        final msg = utf8.decode(data);
-        _stream.add(msg);
-      }, onDone: () => disconnect());
-      return true;
-    } catch (_) {
-      return false;
+    for (final r in scanRes) {
+      final name = r.device.platformName;
+      if (name.toLowerCase().contains("soma-merchant")) {
+        _device = r.device;
+        break;
+      }
     }
+    _device ??= scanRes.isNotEmpty ? scanRes.first.device : null;
+    if (_device == null) return false;
+
+    await _device!.connect(autoConnect: false, timeout: const Duration(seconds: 8)).onError((_, __){});
+    final services = await _device!.discoverServices();
+    for (final s in services) {
+      if (s.uuid.str128.toLowerCase() == kServiceUuid) {
+        for (final c in s.characteristics) {
+          if (c.uuid.str128.toLowerCase() == kCharUuid) {
+            _txChar = c;
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
-  Future<void> sendJson(Map<String, dynamic> json) async {
-    if (!isConnected) return;
-    final line = jsonEncode(json) + '\n';
-    _conn!.output.add(utf8.encode(line));
-    await _conn!.output.allSent;
+  Future<bool> sendPayment({
+    required int amount,
+    required String wallet,
+    required String txId,
+  }) async {
+    if (_txChar == null) return false;
+    final payload = jsonEncode({
+      "type": "PAY",
+      "amount": amount,
+      "wallet": wallet,
+      "txId": txId,
+      "ts": DateTime.now().toIso8601String()
+    });
+    final bytes = utf8.encode(payload);
+    await _txChar!.write(bytes, withoutResponse: true);
+    return true;
   }
 
-  void disconnect() {
-    _conn?.dispose();
-    _conn = null;
+  Future<void> dispose() async {
+    try { await _device?.disconnect(); } catch (_) {}
   }
 }
