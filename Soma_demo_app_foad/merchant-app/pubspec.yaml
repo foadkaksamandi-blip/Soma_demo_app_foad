@@ -1,23 +1,24 @@
 name: merchant_app
-description: SOMA demo — Merchant app
+description: Soma demo merchant app
 publish_to: "none"
-version: 0.0.1+1
+version: 1.0.0+1
 
 environment:
-  sdk: ">=2.17.0 <3.0.0"
+  sdk: ">=2.18.0 <4.0.0"
   flutter: ">=3.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
+
   cupertino_icons: ^1.0.2
-  provider: ^6.0.5
-  uuid: ^3.0.6
-  flutter_blue_plus: ^1.3.6
-  qr_flutter: ^4.0.0
-  qr_code_scanner: ^0.7.0
-  permission_handler: ^10.4.0
-  intl: ^0.18.0
+
+  # demo plugins (install latest compatible)
+  mobile_scanner: any
+  qr_flutter: any
+  nearby_connections: any
+  permission_handler: any
+  flutter_blue_plus: any
 
 dev_dependencies:
   flutter_test:
@@ -27,4 +28,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/
+    - assets/
