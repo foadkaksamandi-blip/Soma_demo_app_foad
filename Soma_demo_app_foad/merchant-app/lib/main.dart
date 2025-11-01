@@ -1,131 +1,106 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:uuid/uuid.dart';
 
-void main() => runApp(MerchantApp());
+void main() => runApp(const MerchantApp());
 
 class MerchantApp extends StatelessWidget {
+  const MerchantApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(title: 'SOMA Merchant', home: MerchantHome());
+    return MaterialApp(
+      title: 'Soma Merchant',
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
+      home: const MerchantHomePage(),
+    );
   }
 }
 
-class MerchantHome extends StatefulWidget {
+class MerchantHomePage extends StatefulWidget {
+  const MerchantHomePage({super.key});
   @override
-  _MerchantHomeState createState() => _MerchantHomeState();
+  State<MerchantHomePage> createState() => _MerchantHomePageState();
 }
 
-class _MerchantHomeState extends State<MerchantHome> {
-  FlutterBluePlus fb = FlutterBluePlus.instance;
-  List<ScanResult> devices = [];
-  String last = '';
-  final uuid = Uuid();
-
-  @override
-  void initState() {
-    super.initState();
-    requestPermissions();
-    startScan();
-  }
-
-  Future<void> requestPermissions() async {
-    await Permission.bluetooth.request();
-    await Permission.bluetoothScan.request();
-    await Permission.bluetoothConnect.request();
-    await Permission.location.request();
-    await Permission.camera.request();
-  }
-
-  void startScan() {
-    devices.clear();
-    fb.startScan(timeout: Duration(seconds: 6)).listen((r) {
-      if (!devices.any((d) => d.device.id == r.device.id)) {
-        setState(() => devices.add(r));
-      }
-    }, onDone: () => setState(() {}));
-  }
-
-  String makeMerchantQr() {
-    final data = {'type': 'soma_request', 'merchant': 'shop-123', 'tx': uuid.v4()};
-    return jsonEncode(data);
-  }
-
-  void openQrScanner() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => MerchantQrScanner()));
-  }
+class _MerchantHomePageState extends State<MerchantHomePage> {
+  final String merchantId = const Uuid().v4();
+  String? lastScanned;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('SOMA Merchant — Demo')),
+      appBar: AppBar(title: const Text("App Offline Soma — Merchant")),
       body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(children: [
-          Text('Nearby BLE devices: ${devices.length}'),
-          Expanded(
-            child: ListView.builder(
-              itemCount: devices.length,
-              itemBuilder: (c, i) {
-                final r = devices[i];
-                return ListTile(
-                  title: Text(r.device.name.isNotEmpty ? r.device.name : r.device.id.id),
-                  subtitle: Text('RSSI: ${r.rssi}'),
-                );
+        padding: const EdgeInsets.all(16),
+        child: ListView(
+          children: [
+            Text("Merchant ID (demo): $merchantId"),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const _ScanPage(title: "Scan Buyer QR"),
+                )).then((value) {
+                  if (value is String) setState(() => lastScanned = value);
+                });
               },
+              child: const Text("Scan QR"),
             ),
-          ),
-          Divider(),
-          Text('Merchant QR (request)'),
-          SizedBox(height: 8),
-          QrImage(data: makeMerchantQr(), size: 180),
-          SizedBox(height: 8),
-          ElevatedButton(onPressed: openQrScanner, child: Text('Scan Buyer QR')),
-        ]),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("My QR (share to buyer)"),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: QrImageView(
+                        data: '{"type":"merchant","id":"$merchantId"}',
+                        version: QrVersions.auto,
+                        size: 220,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (lastScanned != null) ...[
+              const SizedBox(height: 16),
+              const Text("Last scanned payload:"),
+              SelectableText(lastScanned!),
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class MerchantQrScanner extends StatefulWidget {
-  @override
-  _MerchantQrScannerState createState() => _MerchantQrScannerState();
-}
-
-class _MerchantQrScannerState extends State<MerchantQrScanner> {
-  final GlobalKey qrKey = GlobalKey(debugLabel: 'merchantQr');
-  QRViewController? controller;
-  String scanned = '';
-
-  @override
-  void dispose() {
-    controller?.dispose();
-    super.dispose();
-  }
-
-  void _onQRViewCreated(QRViewController c) {
-    controller = c;
-    controller!.scannedDataStream.listen((d) {
-      setState(() {
-        scanned = d.code ?? '';
-      });
-      controller?.pauseCamera();
-    });
-  }
-
+class _ScanPage extends StatelessWidget {
+  final String title;
+  const _ScanPage({required this.title});
   @override
   Widget build(BuildContext context) {
+    final controller = MobileScannerController();
     return Scaffold(
-      appBar: AppBar(title: Text('Merchant — Scan')),
-      body: Column(children: [
-        Expanded(child: QRView(key: qrKey, onQRViewCreated: _onQRViewCreated)),
-        Text('Scanned: $scanned'),
-        ElevatedButton(onPressed: () => controller?.resumeCamera(), child: Text('Restart'))
-      ]),
+      appBar: AppBar(title: Text(title)),
+      body: MobileScanner(
+        controller: controller,
+        onDetect: (capture) {
+          final barcode = capture.barcodes.firstOrNull;
+          final value = barcode?.rawValue;
+          if (value != null) {
+            Navigator.of(context).pop(value);
+          }
+        },
+      ),
     );
   }
+}
+
+extension<T> on List<T> {
+  T? get firstOrNull => isEmpty ? null : this[0];
 }
