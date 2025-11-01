@@ -1,67 +1,40 @@
 import 'dart:convert';
-import 'dart:async';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
-/// MerchantBluetoothService
-/// - قابل discoverable شدن
-/// - مدیریت اتصال ورودی (RFCOMM)
-/// - ارائه stream از خطوط ورودی JSON
 class MerchantBluetoothService {
-  MerchantBluetoothService._();
-  static final MerchantBluetoothService instance = MerchantBluetoothService._();
+  static const String kServiceUuid = "0000ffaa-0000-1000-8000-00805f9b34fb";
+  static const String kCharUuid = "0000ffab-0000-1000-8000-00805f9b34fb";
 
-  final FlutterBluetoothSerial _bt = FlutterBluetoothSerial.instance;
-  BluetoothConnection? _connection;
-  StreamController<String>? _linesCtrl;
+  BluetoothCharacteristic? _rxChar;
 
-  Future<bool> ensureEnabled() async {
-    final state = await _bt.state;
-    if (state == BluetoothState.STATE_OFF) {
-      final enabled = await _bt.requestEnable();
-      return enabled ?? false;
-    }
-    return true;
+  Future<void> advertise() async {
+    // FlutterBluePlus فعلاً تبلیغ BLE ندارد؛ روی دستگاه فروشنده فقط منتظر اتصال می‌مانیم و از characteristic نوتیفیکیشن می‌گیریم.
   }
 
-  Future<bool> becomeDiscoverable({int seconds = 120}) async {
-    final ok = await ensureEnabled();
-    if (!ok) return false;
-    final allowed = await _bt.requestDiscoverable(seconds);
-    return (allowed ?? 0) > 0;
-  }
-
-  /// در این پیاده‌سازی ساده: اتصال از سمت خریدار برقرار می‌شود و این تابع connection را می‌پذیرد
-  Future<void> setConnection(BluetoothConnection connection) async {
-    await disconnect();
-    _connection = connection;
-    _linesCtrl = StreamController<String>();
-    _connection!.input!.listen((data) {
-      try {
-        final text = utf8.decode(data);
-        // ممکن است چند خطی برسد؛ جداکن با \n
-        final parts = text.split('\n');
-        for (final p in parts) {
-          if (p.trim().isNotEmpty) {
-            _linesCtrl?.add(p.trim());
+  Future<bool> attachToCharacteristic(BluetoothDevice device) async {
+    final services = await device.discoverServices();
+    for (final s in services) {
+      if (s.uuid.str128.toLowerCase() == kServiceUuid) {
+        for (final c in s.characteristics) {
+          if (c.uuid.str128.toLowerCase() == kCharUuid) {
+            _rxChar = c;
+            await _rxChar!.setNotifyValue(true);
+            return true;
           }
         }
-      } catch (_) {}
-    }, onDone: () {
-      _linesCtrl?.close();
-    });
+      }
+    }
+    return false;
   }
 
-  Stream<String>? get inboundLines => _linesCtrl?.stream;
-
-  Future<void> disconnect() async {
-    try {
-      await _connection?.close();
-      _connection?.dispose();
-    } catch (_) {}
-    try {
-      await _linesCtrl?.close();
-    } catch (_) {}
-    _connection = null;
-    _linesCtrl = null;
+  Stream<Map<String, dynamic>> onPayments() async* {
+    if (_rxChar == null) return;
+    await for (final v in _rxChar!.value) {
+      try {
+        final s = utf8.decode(v);
+        final m = jsonDecode(s) as Map<String, dynamic>;
+        if (m['type'] == 'PAY') yield m;
+      } catch (_) {}
+    }
   }
 }
