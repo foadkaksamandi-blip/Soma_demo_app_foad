@@ -20,171 +20,108 @@ class _QrScreenState extends State<QrScreen> {
 
   bool _showScanner = true;
   String? _txId;
-  String? _status;
-  String? _confirmPayload; // برای تولید QR پاسخ
+  String _status = '';
+  String? _confirmPayload;
 
   @override
   void initState() {
     super.initState();
-    final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? {};
-    _amount = (args['amount'] ?? 0) as int;
-    _wallet = (args['wallet'] ?? 'main') as String;
+    // آرگومان‌های ورودی از صفحه قبل
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? {};
+      _amount = (args['amount'] ?? 0) as int;
+      _wallet = (args['wallet'] ?? 'main') as String;
+      _ensureCam();
+      setState(() {});
+    });
   }
 
   Future<void> _ensureCam() async {
-    final ok = await AppPermissions.ensureBtAndCamera();
-    if (!ok) {
-      setState(() => _status = 'مجوز دوربین لازم است.');
-    }
+    final ok = await AppPermissions.ensureBTAndCamera();
+    if (!ok) setState(() => _status = 'مجوز دوربین/بلوتوث لازم است');
   }
 
   Future<void> _onScan(String raw) async {
-    // raw باید از فروشنده باشد: {"type":"REQ","amount":...}
     try {
       final m = jsonDecode(raw) as Map;
       final want = (m['amount'] ?? 0) as int;
       if (want != _amount) {
-        setState(() => _status = 'مبلغ تطابق ندارد.');
+        setState(() => _status = 'مبلغ با فاکتور تطبیق ندارد.');
         return;
       }
       final ok = await LocalDB.instance.spend(_amount, wallet: _wallet);
       if (!ok) {
-        setState(() => _status = 'موجودی کافی نیست.');
+        setState(() => _status = 'موجودی کیف انتخابی کافی نیست.');
         return;
       }
       final tx = LocalDB.instance.newTxId();
       setState(() {
         _txId = tx;
-        _status = 'تراکنش موفق';
+        _status = 'تأییدیه آماده نمایش به فروشنده';
         _confirmPayload = jsonEncode({
-          "type":"CONFIRM",
+          "type": "CONFIRM",
           "txId": tx,
           "amount": _amount,
           "wallet": _wallet,
-          "ts": DateTime.now().toIso8601String()
+          "time": DateTime.now().toIso8601String(),
         });
         _showScanner = false;
       });
     } catch (_) {
-      setState(() => _status = 'QR نامعتبر');
+      setState(() => _status = 'QR نامعتبر است');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const green = Color(0xFF27AE60);
-
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(title: const Text('پرداخت با QR')),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(children: [
-                const Text('مبلغ: ', style: TextStyle(fontWeight: FontWeight.w700)),
-                Text('${_fmt.format(_amount)} ریال')
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                const Text('کیف پول: ', style: TextStyle(fontWeight: FontWeight.w700)),
-                Text(_walletFa(_wallet))
-              ]),
-              const SizedBox(height: 12),
-
-              if (_showScanner) ...[
-                ElevatedButton.icon(
-                  onPressed: _ensureCam,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('اجازه دوربین'),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: MobileScanner(
-                      onDetect: (barcode) {
-                        final v = barcode.barcodes.isNotEmpty
-                            ? barcode.barcodes.first.rawValue
-                            : barcode.raw ?? '';
-                        if (v != null && v.isNotEmpty) {
-                          _onScan(v);
-                        }
+    return Scaffold(
+      appBar: AppBar(title: const Text('پرداخت QR (آفلاین)')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('مبلغ: ${_fmt.format(_amount)}',
+                textDirection: TextDirection.rtl),
+            const SizedBox(height: 8),
+            Text('کیف: $_wallet', textDirection: TextDirection.rtl),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _showScanner
+                  ? MobileScanner(
+                      onDetect: (capture) {
+                        final b = capture.barcodes.firstOrNull;
+                        final raw = b?.rawValue;
+                        if (raw != null) _onScan(raw);
                       },
+                    )
+                  : Center(
+                      child: QrImageView(
+                        data: _confirmPayload ?? '',
+                        version: QrVersions.auto,
+                        size: 240,
+                      ),
                     ),
-                  ),
-                ),
-              ] else ...[
-                const Text('QR تایید برای فروشنده (اسکن کند):'),
-                const SizedBox(height: 8),
-                if (_confirmPayload != null)
-                  QrImageView(
-                    data: _confirmPayload!,
-                    size: 220,
-                    backgroundColor: Colors.white,
-                  ),
-                const SizedBox(height: 16),
-                if (_txId != null)
-                  _receiptBox(
-                    txId: _txId!,
-                    method: 'QR',
-                    amount: _fmt.format(_amount),
-                  ),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.home),
-                  label: const Text('بازگشت به صفحه اصلی'),
-                )
-              ],
-
-              const SizedBox(height: 12),
-              if (_status != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(_status!, textAlign: TextAlign.center),
-                ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            Text(_status,
+                style: const TextStyle(fontSize: 16),
+                textDirection: TextDirection.rtl),
+            if (_txId != null)
+              Text('کد تراکنش: $_txId',
+                  textDirection: TextDirection.rtl),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, _txId),
+              child: const Text('تأیید و بازگشت'),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  String _walletFa(String w) {
-    switch (w) {
-      case 'subsidy': return 'موجودی یارانه';
-      case 'emergency': return 'موجودی اضطراری ملی';
-      case 'cbdc': return 'موجودی کیف پول رمز ارز ملی';
-      default: return 'موجودی حساب اصلی';
-    }
-  }
-
-  Widget _receiptBox({required String txId, required String method, required String amount}) {
-    final now = DateTime.now();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('کد تراکنش: $txId'),
-          Text('نحوه پرداخت: $method'),
-          Text('مبلغ: $amount ریال'),
-          Text('زمان: ${now.year}/${now.month}/${now.day} - ${now.hour}:${now.minute.toString().padLeft(2,'0')}'),
-        ],
-      ),
-    );
-  }
+extension<T> on List<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
