@@ -4,9 +4,9 @@ class LocalDB {
   LocalDB._();
   static final instance = LocalDB._();
 
-  int _main = 2_000_000;
-  int _subsidy = 1_500_000;
-  int _emergency = 800_000;
+  int _main = 2000000;
+  int _subsidy = 1500000;
+  int _emergency = 800000;
   int _cbdc = 0;
 
   Future<int> getBalance({String wallet = 'main'}) async {
