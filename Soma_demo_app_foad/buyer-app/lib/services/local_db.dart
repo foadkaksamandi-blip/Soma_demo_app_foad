@@ -1,59 +1,46 @@
-class LocalDB {
-  // موجودی‌های اولیه آزمایشی
-  static int buyerBalance = 1000000;   // عادی
-  static int buyerSubsidy = 500000;    // یارانه
-  static int buyerEmergency = 300000;  // اضطراری
-  static int buyerCBDC = 200000;       // رمز ارز ملی
+import 'dart:math';
 
-  static Future<void> addToWallet(String source, int amount) async {
-    switch (source) {
-      case 'عادی':
-        buyerBalance += amount;
-        break;
-      case 'یارانه':
-        buyerSubsidy += amount;
-        break;
-      case 'اضطراری':
-        buyerEmergency += amount;
-        break;
-      case 'رمزارز':
-      case 'رمز ارز ملی':
-        buyerCBDC += amount;
-        break;
-      default:
-        buyerBalance += amount;
+class LocalDB {
+  LocalDB._();
+  static final instance = LocalDB._();
+
+  int _main = 2_000_000;
+  int _subsidy = 1_500_000;
+  int _emergency = 800_000;
+  int _cbdc = 0;
+
+  Future<int> getBalance({String wallet = 'main'}) async {
+    switch (wallet) {
+      case 'subsidy': return _subsidy;
+      case 'emergency': return _emergency;
+      case 'cbdc': return _cbdc;
+      default: return _main;
     }
   }
 
-  static Future<bool> tryPay(String source, int amount) async {
-    bool ok = false;
-    switch (source) {
-      case 'عادی':
-        if (buyerBalance >= amount) {
-          buyerBalance -= amount; ok = true;
-        }
-        break;
-      case 'یارانه':
-        if (buyerSubsidy >= amount) {
-          buyerSubsidy -= amount; ok = true;
-        }
-        break;
-      case 'اضطراری':
-        if (buyerEmergency >= amount) {
-          buyerEmergency -= amount; ok = true;
-        }
-        break;
-      case 'رمزارز':
-      case 'رمز ارز ملی':
-        if (buyerCBDC >= amount) {
-          buyerCBDC -= amount; ok = true;
-        }
-        break;
-      default:
-        if (buyerBalance >= amount) {
-          buyerBalance -= amount; ok = true;
-        }
+  Future<void> addBalance(int v, {String wallet='main'}) async {
+    switch (wallet) {
+      case 'subsidy': _subsidy += v; break;
+      case 'emergency': _emergency += v; break;
+      case 'cbdc': _cbdc += v; break;
+      default: _main += v;
     }
-    return ok;
+  }
+
+  Future<bool> spend(int v, {String wallet='main'}) async {
+    int b = await getBalance(wallet: wallet);
+    if (b < v) return false;
+    switch (wallet) {
+      case 'subsidy': _subsidy -= v; break;
+      case 'emergency': _emergency -= v; break;
+      case 'cbdc': _cbdc -= v; break;
+      default: _main -= v;
+    }
+    return true;
+  }
+
+  String newTxId() {
+    final rnd = Random().nextInt(900000) + 100000;
+    return 'TX-${DateTime.now().millisecondsSinceEpoch}-$rnd';
   }
 }
