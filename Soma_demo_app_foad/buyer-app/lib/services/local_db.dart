@@ -1,72 +1,81 @@
-import 'dart:async';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Simple local key-value wallet DB for the demo.
-/// Keys:
-///  - wallet_main
-///  - wallet_subsidy
-///  - wallet_emergency
-///  - wallet_crypto
 class LocalDB {
   LocalDB._();
   static final LocalDB instance = LocalDB._();
 
-  Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
+  static const _kMain = 'wallet_main';
+  static const _kSubsidy = 'wallet_subsidy';
+  static const _kEmergency = 'wallet_emergency';
+  static const _kCrypto = 'wallet_crypto';
+  static const _kLastTxId = 'last_tx_id';
 
-  String _keyForWallet(String wallet) {
+  Future<SharedPreferences> get _sp async => SharedPreferences.getInstance();
+
+  Future<void> ensureDefaults() async {
+    final sp = await _sp;
+    if (!sp.containsKey(_kMain)) {
+      await sp.setInt(_kMain, 100000);
+      await sp.setInt(_kSubsidy, 50000);
+      await sp.setInt(_kEmergency, 20000);
+      await sp.setInt(_kCrypto, 300000);
+      await sp.setInt(_kLastTxId, 100000 + Random().nextInt(900000));
+    }
+  }
+
+  Future<int> balance(String wallet) async {
+    final sp = await _sp;
     switch (wallet) {
       case 'main':
-        return 'wallet_main';
+        return sp.getInt(_kMain) ?? 0;
       case 'subsidy':
-        return 'wallet_subsidy';
+        return sp.getInt(_kSubsidy) ?? 0;
       case 'emergency':
-        return 'wallet_emergency';
+        return sp.getInt(_kEmergency) ?? 0;
       case 'crypto':
-        return 'wallet_crypto';
+        return sp.getInt(_kCrypto) ?? 0;
       default:
-        return 'wallet_main';
+        return 0;
     }
   }
 
-  /// Returns current balance (rial) for given wallet.
-  Future<int> balance(String wallet) async {
-    final p = await _prefs;
-    return p.getInt(_keyForWallet(wallet)) ?? 0;
+  Future<bool> _setBalance(String wallet, int v) async {
+    final sp = await _sp;
+    switch (wallet) {
+      case 'main':
+        return sp.setInt(_kMain, v);
+      case 'subsidy':
+        return sp.setInt(_kSubsidy, v);
+      case 'emergency':
+        return sp.setInt(_kEmergency, v);
+      case 'crypto':
+        return sp.setInt(_kCrypto, v);
+      default:
+        return false;
+    }
   }
 
-  /// Initializes demo balances if not set.
-  Future<void> ensureSeed() async {
-    final p = await _prefs;
-    p.setInt('wallet_main', p.getInt('wallet_main') ?? 100000);
-    p.setInt('wallet_subsidy', p.getInt('wallet_subsidy') ?? 50000);
-    p.setInt('wallet_emergency', p.getInt('wallet_emergency') ?? 20000);
-    p.setInt('wallet_crypto', p.getInt('wallet_crypto') ?? 300000);
-  }
-
-  /// Spend [amount] from [wallet]. Returns true on success.
+  /// کاهش موجودی (خرید)
   Future<bool> spend_amount(int amount, String wallet) async {
-    if (amount <= 0) return false;
-    final p = await _prefs;
-    final k = _keyForWallet(wallet);
-    final cur = p.getInt(k) ?? 0;
-    if (cur < amount) return false;
-    await p.setInt(k, cur - amount);
-    return true;
-    }
-
-  /// Adds [amount] to [wallet]. (useful for merchant or refunds)
-  Future<void> add_amount(int amount, String wallet) async {
-    final p = await _prefs;
-    final k = _keyForWallet(wallet);
-    final cur = p.getInt(k) ?? 0;
-    await p.setInt(k, cur + amount);
+    await ensureDefaults();
+    final cur = await balance(wallet);
+    if (amount <= 0 || cur < amount) return false;
+    return _setBalance(wallet, cur - amount);
   }
 
-  /// Generates a simple incremental tx id.
+  /// افزایش موجودی (دریافت)
+  Future<bool> receive_amount(int amount, String wallet) async {
+    await ensureDefaults();
+    final cur = await balance(wallet);
+    if (amount <= 0) return false;
+    return _setBalance(wallet, cur + amount);
+  }
+
   Future<String> newTxId() async {
-    final p = await _prefs;
-    final n = (p.getInt('tx_seq') ?? 0) + 1;
-    await p.setInt('tx_seq', n);
-    return 'TX$n';
+    final sp = await _sp;
+    final next = (sp.getInt(_kLastTxId) ?? 0) + 1;
+    await sp.setInt(_kLastTxId, next);
+    return next.toString();
   }
 }
