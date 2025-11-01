@@ -1,69 +1,72 @@
-import 'dart:math';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// پایگاه دادهٔ محلی ساده برای دمو
-/// کلیدها: wallet_main, wallet_subsidy, wallet_emergency, wallet_crypto
+/// Simple local key-value wallet DB for the demo.
+/// Keys:
+///  - wallet_main
+///  - wallet_subsidy
+///  - wallet_emergency
+///  - wallet_crypto
 class LocalDB {
   LocalDB._();
   static final LocalDB instance = LocalDB._();
 
-  SharedPreferences? _sp;
+  Future<SharedPreferences> get _prefs async => SharedPreferences.getInstance();
 
-  Future<void> _ensure() async {
-    _sp ??= await SharedPreferences.getInstance();
-    // مقادیر اولیه اگر وجود ندارند
-    _sp!.setInt('wallet_main', _sp!.getInt('wallet_main') ?? 100000);
-    _sp!.setInt('wallet_subsidy', _sp!.getInt('wallet_subsidy') ?? 50000);
-    _sp!.setInt('wallet_emergency', _sp!.getInt('wallet_emergency') ?? 20000);
-    _sp!.setInt('wallet_crypto', _sp!.getInt('wallet_crypto') ?? 300000);
-  }
-
-  int _getBalance(String wallet) {
+  String _keyForWallet(String wallet) {
     switch (wallet) {
-      case 'subsidy':
-        return _sp!.getInt('wallet_subsidy') ?? 0;
-      case 'emergency':
-        return _sp!.getInt('wallet_emergency') ?? 0;
-      case 'crypto':
-        return _sp!.getInt('wallet_crypto') ?? 0;
       case 'main':
+        return 'wallet_main';
+      case 'subsidy':
+        return 'wallet_subsidy';
+      case 'emergency':
+        return 'wallet_emergency';
+      case 'crypto':
+        return 'wallet_crypto';
       default:
-        return _sp!.getInt('wallet_main') ?? 0;
+        return 'wallet_main';
     }
   }
 
-  Future<bool> spendAmount(int amount, String wallet) async {
-    await _ensure();
+  /// Returns current balance (rial) for given wallet.
+  Future<int> balance(String wallet) async {
+    final p = await _prefs;
+    return p.getInt(_keyForWallet(wallet)) ?? 0;
+  }
+
+  /// Initializes demo balances if not set.
+  Future<void> ensureSeed() async {
+    final p = await _prefs;
+    p.setInt('wallet_main', p.getInt('wallet_main') ?? 100000);
+    p.setInt('wallet_subsidy', p.getInt('wallet_subsidy') ?? 50000);
+    p.setInt('wallet_emergency', p.getInt('wallet_emergency') ?? 20000);
+    p.setInt('wallet_crypto', p.getInt('wallet_crypto') ?? 300000);
+  }
+
+  /// Spend [amount] from [wallet]. Returns true on success.
+  Future<bool> spend_amount(int amount, String wallet) async {
     if (amount <= 0) return false;
-
-    final current = _getBalance(wallet);
-    if (current < amount) return false;
-
-    final newVal = current - amount;
-    switch (wallet) {
-      case 'subsidy':
-        await _sp!.setInt('wallet_subsidy', newVal);
-        break;
-      case 'emergency':
-        await _sp!.setInt('wallet_emergency', newVal);
-        break;
-      case 'crypto':
-        await _sp!.setInt('wallet_crypto', newVal);
-        break;
-      case 'main':
-      default:
-        await _sp!.setInt('wallet_main', newVal);
-        break;
-    }
+    final p = await _prefs;
+    final k = _keyForWallet(wallet);
+    final cur = p.getInt(k) ?? 0;
+    if (cur < amount) return false;
+    await p.setInt(k, cur - amount);
     return true;
+    }
+
+  /// Adds [amount] to [wallet]. (useful for merchant or refunds)
+  Future<void> add_amount(int amount, String wallet) async {
+    final p = await _prefs;
+    final k = _keyForWallet(wallet);
+    final cur = p.getInt(k) ?? 0;
+    await p.setInt(k, cur + amount);
   }
 
+  /// Generates a simple incremental tx id.
   Future<String> newTxId() async {
-    await _ensure();
-    final rnd = Random();
-    final id =
-        '${DateTime.now().millisecondsSinceEpoch.toRadixString(16)}-${rnd.nextInt(1 << 20).toRadixString(16)}';
-    return id;
-    // (در دمو نیازی به ذخیره تاریخچه نیست؛ صرفاً شناسه برمی‌گردد)
+    final p = await _prefs;
+    final n = (p.getInt('tx_seq') ?? 0) + 1;
+    await p.setInt('tx_seq', n);
+    return 'TX$n';
   }
 }
