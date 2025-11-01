@@ -1,11 +1,19 @@
+import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
 class AppPermissions {
-  static Future<bool> ensureBtAndCamera() async {
-    final bt = await Permission.bluetoothConnect.request();
-    final scan = await Permission.bluetoothScan.request();
-    final loc = await Permission.locationWhenInUse.request();
+  static Future<bool> ensureBTAndCamera() async {
     final cam = await Permission.camera.request();
-    return bt.isGranted && scan.isGranted && loc.isGranted && cam.isGranted;
+    if (!cam.isGranted) return false;
+
+    if (Platform.isAndroid) {
+      final btScan = await Permission.bluetoothScan.request();
+      final btConnect = await Permission.bluetoothConnect.request();
+      final loc = await Permission.locationWhenInUse.request();
+      if (!(btScan.isGranted && btConnect.isGranted && loc.isGranted)) {
+        return false;
+      }
+    }
+    return true;
   }
 }
