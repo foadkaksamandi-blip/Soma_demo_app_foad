@@ -1,202 +1,106 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:uuid/uuid.dart';
 
-void main() {
-  runApp(BuyerApp());
-}
+void main() => runApp(const BuyerApp());
 
 class BuyerApp extends StatelessWidget {
+  const BuyerApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SOMA Buyer Demo',
-      home: BuyerHomePage(),
+      title: 'Soma Buyer',
+      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
+      home: const BuyerHomePage(),
     );
   }
 }
 
 class BuyerHomePage extends StatefulWidget {
+  const BuyerHomePage({super.key});
   @override
-  _BuyerHomePageState createState() => _BuyerHomePageState();
+  State<BuyerHomePage> createState() => _BuyerHomePageState();
 }
 
 class _BuyerHomePageState extends State<BuyerHomePage> {
-  FlutterBluePlus flutterBlue = FlutterBluePlus.instance;
-  List<ScanResult> scanResults = [];
-  BluetoothDevice? connectedDevice;
-  String lastMessage = '';
-  final uuid = Uuid();
-
-  @override
-  void initState() {
-    super.initState();
-    requestPermissions();
-    startScan();
-  }
-
-  Future<void> requestPermissions() async {
-    await Permission.bluetooth.request();
-    await Permission.bluetoothScan.request();
-    await Permission.bluetoothConnect.request();
-    await Permission.location.request();
-    await Permission.camera.request();
-  }
-
-  void startScan() {
-    scanResults.clear();
-    flutterBlue.startScan(timeout: Duration(seconds: 6)).listen((result) {
-      setState(() {
-        if (!scanResults.any((r) => r.device.id == result.device.id)) {
-          scanResults.add(result);
-        }
-      });
-    }, onDone: () {
-      setState(() {});
-    });
-  }
-
-  Future<void> connectToDevice(BluetoothDevice device) async {
-    await device.connect(timeout: Duration(seconds: 10)).catchError((e) {});
-    setState(() {
-      connectedDevice = device;
-    });
-    // discover services
-    List<BluetoothService> services = await device.discoverServices();
-    // For demo: try to write/read first writable characteristic found
-    for (var s in services) {
-      for (var c in s.characteristics) {
-        if (c.properties.write) {
-          try {
-            var payload = utf8.encode('SOMA:${uuid.v4()}');
-            await c.write(payload, withoutResponse: false);
-            lastMessage = 'Wrote to ${c.uuid}';
-            setState(() {});
-            // Try read if readable
-            if (c.properties.read) {
-              var value = await c.read();
-              lastMessage = 'Read: ${utf8.decode(value)}';
-              setState(() {});
-            }
-            return;
-          } catch (e) {
-            // ignore demo errors
-          }
-        }
-      }
-    }
-  }
-
-  void disconnect() {
-    connectedDevice?.disconnect();
-    connectedDevice = null;
-    setState(() {});
-  }
-
-  // QR generation sample
-  String generatePaymentQr() {
-    // simple JSON payload; in real product sign & encrypt
-    final data = {'type': 'soma_payment', 'amount': 1000, 'tx': uuid.v4()};
-    return jsonEncode(data);
-  }
-
-  // Navigate to QR scanner page
-  void openQrScanner() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => QrScannerPage()));
-  }
+  final String buyerId = const Uuid().v4();
+  String? lastScanned;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        appBar: AppBar(title: Text('SOMA Buyer — Demo')),
-        body: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            children: [
-              Text('BLE Scan Results (${scanResults.length})'),
-              SizedBox(height: 8),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: scanResults.length,
-                  itemBuilder: (context, idx) {
-                    final r = scanResults[idx];
-                    return ListTile(
-                      title: Text(r.device.name.isNotEmpty ? r.device.name : r.device.id.id),
-                      subtitle: Text(r.rssi.toString()),
-                      trailing: ElevatedButton(
-                        child: Text('Connect'),
-                        onPressed: () => connectToDevice(r.device),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (connectedDevice != null) ...[
-                Text('Connected: ${connectedDevice!.id.id}'),
-                ElevatedButton(onPressed: disconnect, child: Text('Disconnect')),
-                Text('Last: $lastMessage'),
-              ],
-              Divider(),
-              Text('QR Payment'),
-              SizedBox(height: 8),
-              QrImage(data: generatePaymentQr(), size: 180),
-              SizedBox(height: 8),
-              ElevatedButton(onPressed: openQrScanner, child: Text('Scan QR')),
-            ],
-          ),
-        ));
-  }
-}
-
-class QrScannerPage extends StatefulWidget {
-  @override
-  _QrScannerPageState createState() => _QrScannerPageState();
-}
-
-class _QrScannerPageState extends State<QrScannerPage> {
-  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
-  QRViewController? controller;
-  String scanned = '';
-
-  @override
-  void dispose() {
-    controller?.dispose();
-    super.dispose();
-  }
-
-  void _onQRViewCreated(QRViewController ctrl) {
-    controller = ctrl;
-    controller!.scannedDataStream.listen((scanData) {
-      setState(() {
-        scanned = scanData.code ?? '';
-      });
-      controller?.pauseCamera();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-        appBar: AppBar(title: Text('Scan QR')),
-        body: Column(
+      appBar: AppBar(title: const Text("App Offline Soma — Buyer")),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ListView(
           children: [
-            Expanded(child: QRView(key: qrKey, onQRViewCreated: _onQRViewCreated)),
-            SizedBox(height: 8),
-            Text('Scanned: $scanned'),
+            Text("My ID (for demo): $buyerId"),
+            const SizedBox(height: 16),
             ElevatedButton(
               onPressed: () {
-                controller?.resumeCamera();
-                setState(() {
-                  scanned = '';
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const _ScanPage(title: "Scan Merchant QR"),
+                )).then((value) {
+                  if (value is String) setState(() => lastScanned = value);
                 });
               },
-              child: Text('Restart'),
-            )
+              child: const Text("Scan QR"),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("My QR (share to merchant)"),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: QrImageView(
+                        data: '{"type":"buyer","id":"$buyerId"}',
+                        version: QrVersions.auto,
+                        size: 220,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (lastScanned != null) ...[
+              const SizedBox(height: 16),
+              const Text("Last scanned payload:"),
+              SelectableText(lastScanned!),
+            ],
           ],
-        ));
+        ),
+      ),
+    );
   }
+}
+
+class _ScanPage extends StatelessWidget {
+  final String title;
+  const _ScanPage({required this.title});
+  @override
+  Widget build(BuildContext context) {
+    final controller = MobileScannerController();
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: MobileScanner(
+        controller: controller,
+        onDetect: (capture) {
+          final barcode = capture.barcodes.firstOrNull;
+          final value = barcode?.rawValue;
+          if (value != null) {
+            Navigator.of(context).pop(value);
+          }
+        },
+      ),
+    );
+  }
+}
+
+extension<T> on List<T> {
+  T? get firstOrNull => isEmpty ? null : this[0];
 }
