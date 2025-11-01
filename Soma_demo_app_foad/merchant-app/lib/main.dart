@@ -1,106 +1,153 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:uuid/uuid.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart';
 
-void main() => runApp(const MerchantApp());
+import 'screens/generate_qr_screen.dart';
+import 'screens/bluetooth_receive_screen.dart';
+import 'services/local_db.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MerchantApp());
+}
 
 class MerchantApp extends StatelessWidget {
   const MerchantApp({super.key});
+
   @override
   Widget build(BuildContext context) {
+    const Color green = Color(0xFF27AE60);
+    const Color bg = Color(0xFFF7FAFC);
+    const Color dark = Color(0xFF0B2545);
+
     return MaterialApp(
-      title: 'Soma Merchant',
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.teal),
-      home: const MerchantHomePage(),
+      debugShowCheckedModeBanner: false,
+      title: 'اپ آفلاین سوما — فروشنده',
+      theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: bg,
+        colorScheme: ColorScheme.fromSeed(seedColor: green, primary: green),
+        appBarTheme: const AppBarTheme(backgroundColor: green, foregroundColor: Colors.white),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: dark),
+          bodyMedium: TextStyle(fontSize: 16, color: dark),
+        ),
+      ),
+      locale: const Locale('fa'),
+      supportedLocales: const [Locale('fa'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      routes: {
+        '/': (_) => const MerchantHomePage(),
+        '/qr/generate': (_) => const GenerateQrScreen(),
+        '/bt/receive': (_) => const BluetoothReceiveScreen(),
+      },
+      initialRoute: '/',
     );
   }
 }
 
 class MerchantHomePage extends StatefulWidget {
   const MerchantHomePage({super.key});
+
   @override
   State<MerchantHomePage> createState() => _MerchantHomePageState();
 }
 
 class _MerchantHomePageState extends State<MerchantHomePage> {
-  final String merchantId = const Uuid().v4();
-  String? lastScanned;
+  final _fmt = NumberFormat.decimalPattern('fa');
+  int _balance = 0;
+
+  Future<void> _load() async {
+    _balance = await LocalDBMerchant.instance.balance;
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("App Offline Soma — Merchant")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
+    const green = Color(0xFF27AE60);
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('اپ آفلاین سوما')),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            Text("Merchant ID (demo): $merchantId"),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => const _ScanPage(title: "Scan Buyer QR"),
-                )).then((value) {
-                  if (value is String) setState(() => lastScanned = value);
-                });
-              },
-              child: const Text("Scan QR"),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("My QR (share to buyer)"),
-                    const SizedBox(height: 12),
-                    Center(
-                      child: QrImageView(
-                        data: '{"type":"merchant","id":"$merchantId"}',
-                        version: QrVersions.auto,
-                        size: 220,
-                      ),
-                    ),
-                  ],
-                ),
+            Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    backgroundColor: green,
+                    child: Icon(Icons.account_balance_wallet, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text('موجودی: ${_fmt.format(_balance)} ریال',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  ),
+                  TextButton(onPressed: _load, child: const Text('بروزرسانی'))
+                ],
               ),
             ),
-            if (lastScanned != null) ...[
-              const SizedBox(height: 16),
-              const Text("Last scanned payload:"),
-              SelectableText(lastScanned!),
-            ],
+            const SizedBox(height: 12),
+            Text('دریافت از طریق',
+                style: Theme.of(context).textTheme.titleLarge!.copyWith(color: green)),
+            const SizedBox(height: 8),
+            _actionBtn(Icons.bluetooth_searching, 'دریافت با بلوتوث', () {
+              Navigator.pushNamed(context, '/bt/receive');
+            }),
+            const SizedBox(height: 8),
+            _actionBtn(Icons.qr_code_2, 'تولید QR برای اسکن خریدار', () {
+              Navigator.pushNamed(context, '/qr/generate');
+            }),
           ],
         ),
       ),
     );
   }
-}
 
-class _ScanPage extends StatelessWidget {
-  final String title;
-  const _ScanPage({required this.title});
-  @override
-  Widget build(BuildContext context) {
-    final controller = MobileScannerController();
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: MobileScanner(
-        controller: controller,
-        onDetect: (capture) {
-          final barcode = capture.barcodes.firstOrNull;
-          final value = barcode?.rawValue;
-          if (value != null) {
-            Navigator.of(context).pop(value);
-          }
-        },
-      ),
-    );
-  }
-}
-
-extension<T> on List<T> {
-  T? get firstOrNull => isEmpty ? null : this[0];
+  Widget _actionBtn(IconData i, String t, VoidCallback onTap) => Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFF27AE60).withOpacity(0.25)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: const Color(0xFF27AE60),
+                  foregroundColor: Colors.white,
+                  child: Icon(i),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(t,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+                const Icon(Icons.chevron_left),
+              ],
+            ),
+          ),
+        ),
+      );
 }
