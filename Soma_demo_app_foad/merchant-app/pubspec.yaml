@@ -1,28 +1,39 @@
 name: merchant_app
-description: Soma Merchant Demo App
+description: Soma demo — Merchant app (QR generate + Bluetooth receive)
 publish_to: "none"
-version: 1.0.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.4.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
+  cupertino_icons: ^1.0.8
+  intl: ^0.19.0
+
+  # ✅ لازم برای QR
+  qr_flutter: ^4.1.0
+
+  # ✅ لازم برای بلوتوث و اسکن
+  flutter_blue_plus: ^1.32.5
+
+  # ✅ ذخیره‌سازی محلی
+  shared_preferences: ^2.3.2
+
+  # ✅ پرمیشن‌ها (دوربین/بلوتوث/لوکیشن)
+  permission_handler: ^11.3.1
+
+  # (اختیاری اگر صفحه‌ای از اسکن دوربین استفاده کند)
+  mobile_scanner: ^5.2.1
+
+  # (اختیاری اما توصیه‌شده برای متن‌های fa)
   flutter_localizations:
     sdk: flutter
-  intl: ^0.19.0
-  flutter_blue_plus: ^1.31.16
-  mobile_scanner: ^3.5.6
-  path_provider: ^2.1.3
-  shared_preferences: ^2.2.3
-  cupertino_icons: ^1.0.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/
