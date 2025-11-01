@@ -16,29 +16,36 @@ class MerchantApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color green = Color(0xFF27AE60);
-    const Color bg = Color(0xFFF7FAFC);
-    const Color dark = Color(0xFF0B2545);
+    const Color successGreen = Color(0xFF27AE60);
+    const Color textDark = Color(0xFF0B2545);
+    const Color bgLight = Color(0xFFF7FAFC);
+
+    final theme = ThemeData(
+      useMaterial3: true,
+      primaryColor: successGreen,
+      scaffoldBackgroundColor: bgLight,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: successGreen,
+        primary: successGreen,
+        secondary: const Color(0xFF1ABC9C),
+        brightness: Brightness.light,
+      ),
+      textTheme: const TextTheme(
+        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textDark),
+        bodyMedium: TextStyle(fontSize: 16, color: textDark),
+      ),
+    );
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'اپ آفلاین سوما — فروشنده',
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: bg,
-        colorScheme: ColorScheme.fromSeed(seedColor: green, primary: green),
-        appBarTheme: const AppBarTheme(backgroundColor: green, foregroundColor: Colors.white),
-        textTheme: const TextTheme(
-          titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: dark),
-          bodyMedium: TextStyle(fontSize: 16, color: dark),
-        ),
-      ),
+      theme: theme,
       locale: const Locale('fa'),
       supportedLocales: const [Locale('fa'), Locale('en')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
       ],
       routes: {
         '/': (_) => const MerchantHomePage(),
@@ -58,96 +65,127 @@ class MerchantHomePage extends StatefulWidget {
 }
 
 class _MerchantHomePageState extends State<MerchantHomePage> {
+  int balance = LocalDBMerchant.instance.merchantBalance;
+  final TextEditingController amountCtrl = TextEditingController();
   final _fmt = NumberFormat.decimalPattern('fa');
-  int _balance = 0;
-
-  Future<void> _load() async {
-    _balance = await LocalDBMerchant.instance.balance;
-    if (mounted) setState(() {});
-  }
 
   @override
   void initState() {
     super.initState();
-    _load();
+    balance = LocalDBMerchant.instance.merchantBalance;
+  }
+
+  @override
+  void dispose() {
+    amountCtrl.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    setState(() => balance = LocalDBMerchant.instance.merchantBalance);
   }
 
   @override
   Widget build(BuildContext context) {
-    const green = Color(0xFF27AE60);
+    const Color successGreen = Color(0xFF27AE60);
+    const Color textDark = Color(0xFF0B2545);
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(title: const Text('اپ آفلاین سوما')),
-        body: ListView(
+        appBar: AppBar(
+          backgroundColor: successGreen,
+          foregroundColor: Colors.white,
+          title: const Text('اپ آفلاین سوما'),
+          centerTitle: true,
+        ),
+        body: Padding(
           padding: const EdgeInsets.all(16),
-          children: [
-            Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    backgroundColor: green,
-                    child: Icon(Icons.account_balance_wallet, color: Colors.white),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text('موجودی: ${_fmt.format(_balance)} ریال',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  ),
-                  TextButton(onPressed: _load, child: const Text('بروزرسانی'))
-                ],
+          child: ListView(
+            children: [
+              Text('اپ فروشنده', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: successGreen.withOpacity(0.25)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_wallet, color: successGreen),
+                    const SizedBox(width: 8),
+                    Text('موجودی: ${_fmt.format(balance)} ریال',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: textDark)),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: _refresh,
+                      style: ElevatedButton.styleFrom(backgroundColor: successGreen, foregroundColor: Colors.white),
+                      child: const Text('بروزرسانی'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text('دریافت از طریق',
-                style: Theme.of(context).textTheme.titleLarge!.copyWith(color: green)),
-            const SizedBox(height: 8),
-            _actionBtn(Icons.bluetooth_searching, 'دریافت با بلوتوث', () {
-              Navigator.pushNamed(context, '/bt/receive');
-            }),
-            const SizedBox(height: 8),
-            _actionBtn(Icons.qr_code_2, 'تولید QR برای اسکن خریدار', () {
-              Navigator.pushNamed(context, '/qr/generate');
-            }),
-          ],
+
+              const SizedBox(height: 16),
+              Text('دریافت از طریق', style: Theme.of(context).textTheme.titleLarge!.copyWith(color: successGreen)),
+              const SizedBox(height: 8),
+
+              _ActionCard(
+                icon: Icons.bluetooth_searching,
+                title: 'دریافت با بلوتوث',
+                color: const Color(0xFF1ABC9C),
+                onTap: () => Navigator.pushNamed(context, '/bt/receive'),
+              ),
+              const SizedBox(height: 8),
+              _ActionCard(
+                icon: Icons.qr_code_2,
+                title: 'تولید/تأیید QR',
+                color: successGreen,
+                onTap: () => Navigator.pushNamed(context, '/qr/generate'),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _actionBtn(IconData i, String t, VoidCallback onTap) => Material(
-        color: Colors.white,
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionCard({required this.icon, required this.title, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF27AE60).withOpacity(0.25)),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: const Color(0xFF27AE60),
-                  foregroundColor: Colors.white,
-                  child: Icon(i),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(t,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                ),
-                const Icon(Icons.chevron_left),
-              ],
-            ),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            border: Border.all(color: color.withOpacity(0.25)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(backgroundColor: color, foregroundColor: Colors.white, child: Icon(icon)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+              const Icon(Icons.chevron_left),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
