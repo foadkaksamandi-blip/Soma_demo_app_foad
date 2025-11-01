@@ -1,84 +1,117 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/generate_qr_screen.dart';
 import 'screens/bluetooth_receive_screen.dart';
 
 void main() {
-  runApp(const MerchantApp());
+  runApp(const SomaMerchantApp());
 }
 
-class MerchantApp extends StatelessWidget {
-  const MerchantApp({super.key});
+class SomaMerchantApp extends StatelessWidget {
+  const SomaMerchantApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SOMA Merchant',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      debugShowCheckedModeBanner: false,
-      supportedLocales: const [Locale('fa', 'IR')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      locale: const Locale('fa', 'IR'),
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const HomeScreen(),
-        '/qr': (context) => const GenerateQrScreen(amount: 0),
-        '/bt': (context) => const BluetoothReceiveScreen(amount: 0),
-      },
+      title: 'App Offline Soma — Merchant',
+      theme: ThemeData(primarySwatch: Colors.teal),
+      home: const MerchantHomePage(),
     );
   }
 }
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+class MerchantHomePage extends StatefulWidget {
+  const MerchantHomePage({super.key});
+
+  @override
+  State<MerchantHomePage> createState() => _MerchantHomePageState();
+}
+
+class _MerchantHomePageState extends State<MerchantHomePage> {
+  final TextEditingController _amountController = TextEditingController();
+  String _status = '';
+  int _amount = 0;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _navigateToBluetooth() {
+    if (_validateAmount()) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BluetoothReceiveScreen(amount: _amount),
+        ),
+      );
+    }
+  }
+
+  void _navigateToQR() {
+    if (_validateAmount()) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => GenerateQrScreen(amount: _amount),
+        ),
+      );
+    }
+  }
+
+  bool _validateAmount() {
+    try {
+      _amount = int.parse(_amountController.text.trim());
+      if (_amount <= 0) throw Exception();
+      return true;
+    } catch (_) {
+      setState(() => _status = 'مبلغ وارد شده معتبر نیست.');
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final controller = TextEditingController();
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(title: const Text('فروشنده (مرچنت)')),
+        appBar: AppBar(title: const Text('App Offline Soma — Merchant')),
         body: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('مبلغ تراکنش را وارد کنید:'),
+              const SizedBox(height: 10),
+              const Text('مبلغ تراکنش (تومان):',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               TextField(
-                controller: controller,
+                controller: _amountController,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  hintText: 'مثلاً 250000',
+                  hintText: 'مثلاً ۵۰۰۰۰',
+                  border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  final amount = int.tryParse(controller.text) ?? 0;
-                  Navigator.pushNamed(
-                    context,
-                    '/qr',
-                    arguments: {'amount': amount},
-                  );
-                },
-                child: const Text('تولید QR پرداخت'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _navigateToBluetooth,
+                    icon: const Icon(Icons.bluetooth),
+                    label: const Text('دریافت بلوتوث'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _navigateToQR,
+                    icon: const Icon(Icons.qr_code_2),
+                    label: const Text('نمایش QR'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () {
-                  final amount = int.tryParse(controller.text) ?? 0;
-                  Navigator.pushNamed(
-                    context,
-                    '/bt',
-                    arguments: {'amount': amount},
-                  );
-                },
-                child: const Text('دریافت با بلوتوث'),
+              const SizedBox(height: 20),
+              Text(
+                _status,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 14),
               ),
             ],
           ),
