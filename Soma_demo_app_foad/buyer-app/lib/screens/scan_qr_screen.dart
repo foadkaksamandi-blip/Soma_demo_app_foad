@@ -2,11 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-
+import 'package:qr_flutter/qr_flutter.dart';
 import '../services/local_db.dart';
-import '../services/permissions.dart';
 
-/// صفحه اسکن QR فروشنده و انجام پرداخت آفلاین
 class QrScreen extends StatefulWidget {
   const QrScreen({super.key});
 
@@ -15,148 +13,113 @@ class QrScreen extends StatefulWidget {
 }
 
 class _QrScreenState extends State<QrScreen> {
-  final NumberFormat _fmt = NumberFormat.decimalPattern('fa');
+  final _fmt = NumberFormat.decimalPattern('fa');
+  late int _amount;
+  late String _wallet;
 
-  final MobileScannerController _controller = MobileScannerController();
   bool _showScanner = true;
-  bool _handled = false;
-
-  String _status = 'در انتظار اسکن…';
-  String? _txId;
-  int? _amount;
-  String _wallet = 'main';
+  String? _txid;
+  String _status = '';
   String? _confirmPayload;
 
   @override
   void initState() {
     super.initState();
-    // اجازه‌ها (دوربین)
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final ok = await AppPermissions.ensureBTAndCamera();
-      if (!ok && mounted) setState(() => _status = 'مجوز دوربین لازم است.');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? {};
+      _amount = (args['amount'] ?? 0) as int;
+      _wallet = (args['wallet'] ?? 'main') as String;
+      setState(() {});
     });
   }
 
-  Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_handled) return; // فقط اولین اسکن
-    final code = capture.barcodes.firstOrNull?.rawValue;
-    if (code == null) return;
+  Future<void> _ensureCam() async {
+    // دوربین فقط: مجوزها را MobileScanner خودش درخواست می‌کند
+    setState(() => _status = 'دوربین آماده اسکن است');
+  }
 
-    _handled = true;
+  Future<void> _onScan(BarcodeCapture cap) async {
     try {
-      final m = jsonDecode(code) as Map<String, dynamic>;
-      if ((m['type'] as String?) != 'REQ') {
-        setState(() => _status = 'QR نامعتبر است.');
+      final raw = cap.barcodes.isNotEmpty ? cap.barcodes.first.rawValue : null;
+      if (raw == null) return;
+      final m = jsonDecode(raw) as Map;
+      final want = (m['amount'] ?? 0) as int;
+      if (want != _amount) {
+        setState(() => _status = 'مبلغ با فاکتور تطبیق ندارد.');
         return;
       }
-
-      final amount = (m['amount'] as num?)?.toInt() ?? 0;
-      final wallet = (m['wallet'] as String?) ?? 'main';
-
-      if (amount <= 0) {
-        setState(() => _status = 'مبلغ معتبر نیست.');
-        return;
-      }
-
-      // کسر مبلغ از کیف انتخابی
-      final ok = await LocalDB.instance.spend_amount(amount, wallet);
+      final ok = await LocalDB.instance.spend_amount(_amount, _wallet);
       if (!ok) {
         setState(() => _status = 'موجودی کیف انتخابی کافی نیست.');
         return;
       }
-
-      // ثبت تراکنش محلی
       final tx = await LocalDB.instance.newTxId();
-
       setState(() {
-        _amount = amount;
-        _wallet = wallet;
-        _txId = tx;
-        _showScanner = false;
-        _status = 'پرداخت انجام شد.';
+        _txid = tx;
         _confirmPayload = jsonEncode({
-          'type': 'CONFIRM',
-          'txid': tx,
-          'amount': amount,
-          'wallet': wallet,
-          'time': DateTime.now().toIso8601String(),
+          "type": "CONFIRM",
+          "txid": tx,
+          "amount": _amount,
+          "wallet": _wallet,
+          "time": DateTime.now().toIso8601String(),
         });
+        _showScanner = false;
+        _status = 'تراکنش تایید شد';
       });
     } catch (_) {
-      setState(() => _status = 'خطا در خواندن QR.');
+      setState(() => _status = 'QR نامعتبر است');
     }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('اسکن QR (آفلاین)')),
+      appBar: AppBar(title: const Text('پرداخت QR (آفلاین)')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_showScanner)
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: MobileScanner(
-                    controller: _controller,
-                    onDetect: _onDetect,
-                  ),
-                ),
-              )
-            else
-              Expanded(
-                child: Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('نتیجه پرداخت', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 12),
-                        Text('مبلغ: ${_fmt.format(_amount ?? 0)}'),
-                        Text('کیف پول: $_wallet'),
-                        Text('کد تراکنش: ${_txId ?? '—'}'),
-                        const SizedBox(height: 12),
-                        const Divider(),
-                        const SizedBox(height: 8),
-                        const Text('Payload تأیید (برای فروشنده):'),
-                        const SizedBox(height: 6),
-                        SelectableText(_confirmPayload ?? '—'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 12),
-            Text('وضعیت: $_status'),
-            const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 8,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      setState(() {
-                        _handled = false;
-                        _showScanner = true;
-                        _status = 'در انتظار اسکن…';
-                      });
-                    },
-                    child: const Text('اسکن دوباره'),
-                  ),
-                ),
+                ChoiceChip(label: const Text('اصلی'), selected: _wallet=='main', onSelected: (_) => setState(()=>_wallet='main')),
+                ChoiceChip(label: const Text('یارانه‌ای'), selected: _wallet=='subsidy', onSelected: (_) => setState(()=>_wallet='subsidy')),
+                ChoiceChip(label: const Text('اضطراری ملی'), selected: _wallet=='emergency', onSelected: (_) => setState(()=>_wallet='emergency')),
+                ChoiceChip(label: const Text('رمزارز ملی'), selected: _wallet=='crypto', onSelected: (_) => setState(()=>_wallet='crypto')),
               ],
             ),
+            const SizedBox(height: 12),
+            Text('مبلغ خرید: ${_fmt.format(_amount)}'),
+            const SizedBox(height: 12),
+            if (_showScanner) ...[
+              ElevatedButton(
+                onPressed: _ensureCam,
+                child: const Text('تولید و اسکن QR'),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: MobileScanner(
+                  controller: MobileScannerController(
+                    detectionSpeed: DetectionSpeed.normal, // بدون allowDuplicates
+                  ),
+                  onDetect: _onScan,
+                ),
+              ),
+            ] else ...[
+              const Text('برای نمایش به فروشنده – کُد تایید'),
+              const SizedBox(height: 8),
+              if (_confirmPayload != null)
+                QrImageView(data: _confirmPayload!, size: 220),
+              const SizedBox(height: 8),
+              Text('کد تراکنش: ${_txid ?? "-"}'),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, {'ok': true, 'txid': _txid}),
+                child: const Text('تأیید و بازگشت'),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(_status, textDirection: TextDirection.rtl),
           ],
         ),
       ),
