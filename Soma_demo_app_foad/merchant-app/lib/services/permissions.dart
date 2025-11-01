@@ -1,12 +1,11 @@
-// merchant-app/lib/services/permissions.dart
+import 'package:permission_handler/permission_handler.dart';
+
 class AppPermissions {
-  AppPermissions._();
-
-  static Future<bool> ensureCamera() async {
-    return true;
-  }
-
-  static Future<bool> ensureBluetooth() async {
-    return true;
+  static Future<bool> ensureBtAndCamera() async {
+    final bt = await Permission.bluetoothConnect.request();
+    final scan = await Permission.bluetoothScan.request();
+    final loc = await Permission.locationWhenInUse.request();
+    final cam = await Permission.camera.request();
+    return bt.isGranted && scan.isGranted && loc.isGranted && cam.isGranted;
   }
 }
