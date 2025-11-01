@@ -1,14 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:intl/intl.dart';
+import '../services/bluetooth_service.dart';
 import '../services/local_db.dart';
+import '../services/permissions.dart';
 
-/// صفحهٔ دریافت پرداخت از طریق بلوتوث
-/// - فروشنده یکی از دستگاه‌های جفت‌شده (Buyer) را انتخاب می‌کند و اتصال می‌زند.
-/// - پس از دریافت JSON با type=pay، اگر مبلغ معتبر بود موجودی فروشنده افزایش می‌یابد و ACK بازگردانده می‌شود.
-///
-/// توجه: در بعضی گوشی‌ها اتصال Classic RFCOMM بین دو موبایل محدودیت دارد.
-/// اگر اتصال برقرار نشد، ابتدا دستگاه‌ها را Bond کنید و بلوتوث فروشنده را Discoverable کنید.
 class BluetoothReceiveScreen extends StatefulWidget {
   const BluetoothReceiveScreen({super.key});
 
@@ -17,118 +13,74 @@ class BluetoothReceiveScreen extends StatefulWidget {
 }
 
 class _BluetoothReceiveScreenState extends State<BluetoothReceiveScreen> {
-  List<BluetoothDevice> devices = [];
-  BluetoothDevice? selected;
-  BluetoothConnection? connection;
-  String status = 'منتظر اتصال...';
+  final _fmt = NumberFormat.decimalPattern('fa');
+  final _bt = MerchantBluetoothService();
+
+  bool _ready = false;
+  String? _status;
+  String? _lastTx;
 
   @override
   void initState() {
     super.initState();
-    _scanBonded();
+    _prepare();
   }
 
-  Future<void> _scanBonded() async {
-    final bonded = await FlutterBluetoothSerial.instance.getBondedDevices();
-    setState(() => devices = bonded);
-  }
-
-  Future<void> _connect() async {
-    if (selected == null) return;
-    setState(() => status = 'در حال اتصال به ${selected!.name ?? selected!.address}...');
-    try {
-      connection = await BluetoothConnection.toAddress(selected!.address);
-      connection!.input?.listen((data) async {
-        final msg = utf8.decode(data).trim();
-        // پیام‌ها می‌توانند چندتایی بیایند؛ ساده‌سازی: خط‌-محور
-        for (final line in msg.split('\n')) {
-          if (line.isEmpty) continue;
-          try {
-            final Map<String, dynamic> json = jsonDecode(line);
-            if (json['type'] == 'pay') {
-              final int amount = (json['amount'] is int)
-                  ? json['amount'] as int
-                  : int.tryParse('${json['amount']}') ?? 0;
-              if (amount > 0) {
-                LocalDBMerchant.instance.addMerchantBalance(amount);
-                // بازگشت تایید به خریدار
-                connection!.output.add(utf8.encode('ACK\n'));
-                await connection!.output.allSent;
-                if (mounted) {
-                  setState(() => status = 'پرداخت دریافت شد: $amount ریال');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('پرداخت دریافت شد: $amount ریال')),
-                  );
-                }
-              }
-            }
-          } catch (_) {
-            // نادیده بگیر
-          }
-        }
-      }, onDone: () {
-        setState(() => status = 'ارتباط بسته شد.');
-      });
-      setState(() => status = 'اتصال برقرار شد. منتظر پرداخت...');
-    } catch (e) {
-      setState(() => status = 'اتصال ناموفق.');
+  Future<void> _prepare() async {
+    final ok = await AppPermissions.ensureBtAndCamera();
+    if (!ok) {
+      setState(() => _status = 'مجوزها لازم است.');
+      return;
     }
+    setState(() => _ready = true);
   }
 
-  @override
-  void dispose() {
-    connection?.dispose();
-    super.dispose();
+  Future<void> _listen() async {
+    setState(() => _status = 'درحال انتظار دریافت...');
+    await for (final dev in FlutterBluePlus.connectedDevices) {
+      await _bt.attachToCharacteristic(dev);
+    }
+    _bt.onPayments().listen((m) async {
+      final amount = m['amount'] as int;
+      await LocalDBMerchant.instance.add(amount);
+      setState(() {
+        _lastTx = m['txId'] as String?;
+        _status = 'دریافت موفق: ${_fmt.format(amount)} ریال';
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('دریافت با بلوتوث')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButton<BluetoothDevice>(
-                    isExpanded: true,
-                    value: selected,
-                    hint: const Text('انتخاب دستگاه خریدار (bonded)'),
-                    items: devices
-                        .map((d) => DropdownMenuItem(
-                              value: d,
-                              child: Text('${d.name ?? 'Unknown'} (${d.address})'),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() => selected = v),
+    const green = Color(0xFF27AE60);
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('دریافت با بلوتوث')),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              ElevatedButton.icon(
+                onPressed: _ready ? _listen : null,
+                icon: const Icon(Icons.sensors),
+                label: const Text('شروع دریافت'),
+              ),
+              const SizedBox(height: 12),
+              if (_status != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Text(_status!, textAlign: TextAlign.center),
                 ),
-                IconButton(
-                  onPressed: _scanBonded,
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'جستجوی دوباره',
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: _connect,
-              icon: const Icon(Icons.bluetooth_connected),
-              label: const Text('اتصال'),
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('وضعیت: $status'),
-            ),
-            const Spacer(),
-            const Text(
-              'نکته: اگر اتصال برقرار نشد، ابتدا دستگاه‌ها را Pair کنید و بلوتوث فروشنده را Discoverable نگه دارید.',
-              textAlign: TextAlign.center,
-            ),
-          ],
+              const Spacer(),
+              if (_lastTx != null) Text('آخرین کد تراکنش: $_lastTx'),
+            ],
+          ),
         ),
       ),
     );
