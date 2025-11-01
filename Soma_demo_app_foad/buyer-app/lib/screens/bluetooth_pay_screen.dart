@@ -1,8 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:intl/intl.dart';
+import '../services/bluetooth_service.dart';
 import '../services/local_db.dart';
-import '../services/transaction_history.dart';
+import '../services/permissions.dart';
 
 class BluetoothPayScreen extends StatefulWidget {
   const BluetoothPayScreen({super.key});
@@ -12,166 +12,145 @@ class BluetoothPayScreen extends StatefulWidget {
 }
 
 class _BluetoothPayScreenState extends State<BluetoothPayScreen> {
-  List<BluetoothDevice> devices = [];
-  BluetoothDevice? selected;
-  BluetoothConnection? connection;
-  bool connecting = false;
-  bool sending = false;
-  String status = 'منتظر اتصال...';
+  final _fmt = NumberFormat.decimalPattern('fa');
+  final _bt = BuyerBluetoothService();
 
-  int amount = 0;
-  String wallet = 'account';
+  bool _connecting = false;
+  bool _secure = false;
+  String? _status;
+  String? _txId;
+  late int _amount;
+  late String _wallet;
 
   @override
   void initState() {
     super.initState();
     final args = (ModalRoute.of(context)?.settings.arguments as Map?) ?? {};
-    amount = (args['amount'] is int) ? args['amount'] as int : 0;
-    wallet = (args['wallet'] as String?) ?? 'account';
-    _scanBonded();
-  }
-
-  Future<void> _scanBonded() async {
-    final bonded = await FlutterBluetoothSerial.instance.getBondedDevices();
-    setState(() => devices = bonded);
-  }
-
-  Future<void> _connect() async {
-    if (selected == null) return;
-    setState(() {
-      connecting = true;
-      status = 'در حال اتصال به ${selected!.name ?? selected!.address}...';
-    });
-    try {
-      connection = await BluetoothConnection.toAddress(selected!.address);
-      connection!.input?.listen((data) {
-        final msg = utf8.decode(data);
-        if (msg.trim().toUpperCase().contains('ACK')) {
-          // تایید دریافت فروشنده => کسر موجودی و ثبت تراکنش
-          LocalDB.instance.addBuyerBalance(-amount);
-          TransactionHistoryService()
-              .add(method: 'bluetooth', amount: amount, wallet: wallet);
-          if (mounted) {
-            setState(() => status = 'پرداخت موفق از طریق بلوتوث.');
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('پرداخت موفق.')),
-            );
-          }
-        }
-      }, onDone: () {
-        setState(() => status = 'ارتباط بسته شد.');
-      });
-      setState(() => status = 'اتصال برقرار شد. آماده پرداخت.');
-    } catch (e) {
-      setState(() => status = 'اتصال ناموفق.');
-    } finally {
-      setState(() => connecting = false);
-    }
-  }
-
-  Future<void> _sendPayment() async {
-    if (connection == null || !(connection!.isConnected)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('اتصال برقرار نیست.')));
-      return;
-    }
-    if (amount <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('مبلغ نامعتبر است.')));
-      return;
-    }
-    if (LocalDB.instance.buyerBalance < amount) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('موجودی خریدار کافی نیست.')));
-      return;
-    }
-    setState(() {
-      sending = true;
-      status = 'ارسال درخواست پرداخت...';
-    });
-    final payload = jsonEncode({
-      'type': 'pay',
-      'amount': amount,
-      'wallet': wallet,
-      'ts': DateTime.now().millisecondsSinceEpoch,
-    });
-    connection!.output.add(utf8.encode('$payload\n'));
-    await connection!.output.allSent;
-    setState(() {
-      sending = false;
-      status = 'در انتظار تایید فروشنده (ACK)...';
-    });
+    _amount = (args['amount'] ?? 0) as int;
+    _wallet = (args['wallet'] ?? 'main') as String;
   }
 
   @override
   void dispose() {
-    connection?.dispose();
+    _bt.dispose();
     super.dispose();
+  }
+
+  Future<void> _start() async {
+    setState(() { _status = null; _connecting = true; });
+    final ok = await AppPermissions.ensureBtAndCamera();
+    if (!ok) {
+      setState(() { _connecting = false; _status = 'مجوزهای بلوتوث/مکان/دوربین لازم است.'; });
+      return;
+    }
+    final connected = await _bt.connectFirstMerchant();
+    setState(() {
+      _connecting = false;
+      _secure = connected;
+      _status = connected ? 'اتصال ایمن برقرار شد.' : 'فروشنده یافت نشد.';
+    });
+  }
+
+  Future<void> _pay() async {
+    final ok = await LocalDB.instance.spend(_amount, wallet: _wallet);
+    if (!ok) {
+      setState(() { _status = 'موجودی کافی نیست.'; });
+      return;
+    }
+    final txId = LocalDB.instance.newTxId();
+    final sent = await _bt.sendPayment(amount: _amount, wallet: _wallet, txId: txId);
+    setState(() { _txId = sent ? txId : null; _status = sent ? 'تراکنش موفق' : 'ارسال ناموفق'; });
   }
 
   @override
   Widget build(BuildContext context) {
-    final canPay = selected != null && connection?.isConnected == true;
+    const green = Color(0xFF27AE60);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('پرداخت با بلوتوث')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Text('مبلغ: $amount ریال | کیف: $wallet'),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButton<BluetoothDevice>(
-                    isExpanded: true,
-                    value: selected,
-                    hint: const Text('انتخاب دستگاه فروشنده (bonded)'),
-                    items: devices
-                        .map((d) => DropdownMenuItem(
-                              value: d,
-                              child: Text('${d.name ?? 'Unknown'} (${d.address})'),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() => selected = v),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('پرداخت با بلوتوث')),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _row('مبلغ', _fmt.format(_amount)),
+              const SizedBox(height: 12),
+              _row('کیف پول', _walletFa(_wallet)),
+              const SizedBox(height: 16),
+
+              ElevatedButton.icon(
+                onPressed: _connecting ? null : _start,
+                icon: const Icon(Icons.bluetooth_searching),
+                label: Text(_connecting ? 'در حال اتصال...' : 'شروع'),
+              ),
+
+              const SizedBox(height: 12),
+              if (_secure)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: green.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: green.withOpacity(0.3)),
                   ),
+                  child: const Text('اتصال ایمن ✅', textAlign: TextAlign.center),
                 ),
-                IconButton(
-                  onPressed: _scanBonded,
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'جستجوی دوباره دستگاه‌های جفت‌شده',
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: connecting ? null : _connect,
-                  icon: const Icon(Icons.bluetooth_connected),
-                  label: const Text('اتصال'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  onPressed: canPay && !sending ? _sendPayment : null,
-                  icon: const Icon(Icons.send),
-                  label: const Text('ارسال پرداخت'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('وضعیت: $status'),
-            ),
-            const Spacer(),
-            const Text(
-              'نکته: فروشنده باید صفحه «دریافت با بلوتوث» را باز نگه دارد تا ACK ارسال شود.',
-              textAlign: TextAlign.center,
-            ),
-          ],
+
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _secure ? _pay : null,
+                icon: const Icon(Icons.payments),
+                label: const Text('پرداخت'),
+              ),
+
+              const SizedBox(height: 16),
+              if (_status != null) Text(_status!, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const Spacer(),
+              if (_txId != null)
+                _receiptBox(txId: _txId!, method: 'Bluetooth', amount: _fmt.format(_amount)),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _row(String k, String v) => Row(
+        children: [
+          Text('$k: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Expanded(child: Text(v, textAlign: TextAlign.left)),
+        ],
+      );
+
+  String _walletFa(String w) {
+    switch (w) {
+      case 'subsidy': return 'موجودی یارانه';
+      case 'emergency': return 'موجودی اضطراری ملی';
+      case 'cbdc': return 'موجودی کیف پول رمز ارز ملی';
+      default: return 'موجودی حساب اصلی';
+    }
+  }
+
+  Widget _receiptBox({required String txId, required String method, required String amount}) {
+    final now = DateTime.now();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('کد تراکنش: $txId'),
+          Text('نحوه پرداخت: $method'),
+          Text('مبلغ: $amount ریال'),
+          Text('زمان: ${now.year}/${now.month}/${now.day} - ${now.hour}:${now.minute.toString().padLeft(2,'0')}'),
+        ],
       ),
     );
   }
