@@ -1,24 +1,37 @@
-# Flutter/Dart/Pub
+# Flutter/Dart/Pub related
 .dart_tool/
-.flutter-plugins
 .packages
 .pub-cache/
-.buildlog/
 build/
-.idea/
-.vscode/
-.gradle/
-**/android/**/local.properties
+flutter_*.png
+pubspec.lock
+
+# Android related
+**/android/.gradle/
+**/android/.idea/
+**/android/local.properties
+**/android/app/*.keystore
+**/android/app/*.jks
+**/android/app/key.properties
+**/android/captures/
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/GeneratedPluginRegistrant.kt
+
+# iOS (not used, but keep clean)
+**/ios/.generated/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
 **/ios/Pods/
-**/ios/Runner/Generated.xcconfig
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# IDEs
+.vscode/
+.idea/
 *.iml
 
-# macOS files
+# Misc
 .DS_Store
-
-# vscode
-.vscode/
-
-# logs
-logs/
+Thumbs.db
 *.log
+*.tmp
+*.swp
