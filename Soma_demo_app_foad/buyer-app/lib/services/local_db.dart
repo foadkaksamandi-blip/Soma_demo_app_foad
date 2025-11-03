@@ -1,59 +1,44 @@
-class LocalDB {
-  // موجودی‌های اولیه آزمایشی
-  static int buyerBalance = 1000000;   // عادی
-  static int buyerSubsidy = 500000;    // یارانه
-  static int buyerEmergency = 300000;  // اضطراری
-  static int buyerCBDC = 200000;       // رمز ارز ملی
+import 'package:shared_preferences/shared_preferences.dart';
 
-  static Future<void> addToWallet(String source, int amount) async {
-    switch (source) {
-      case 'عادی':
-        buyerBalance += amount;
-        break;
-      case 'یارانه':
-        buyerSubsidy += amount;
-        break;
-      case 'اضطراری':
-        buyerEmergency += amount;
-        break;
-      case 'رمزارز':
-      case 'رمز ارز ملی':
-        buyerCBDC += amount;
-        break;
-      default:
-        buyerBalance += amount;
-    }
+class LocalDB {
+  LocalDB._();
+  static final instance = LocalDB._();
+
+  int buyerBalance = 800000;
+  int buyerSubsidyBalance = 200000;
+  int buyerEmergencyBalance = 150000;
+  int buyerCbdcBalance = 300000;
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    buyerBalance = prefs.getInt('buyerBalance') ?? 800000;
+    buyerSubsidyBalance = prefs.getInt('buyerSubsidyBalance') ?? 200000;
+    buyerEmergencyBalance = prefs.getInt('buyerEmergencyBalance') ?? 150000;
+    buyerCbdcBalance = prefs.getInt('buyerCbdcBalance') ?? 300000;
   }
 
-  static Future<bool> tryPay(String source, int amount) async {
-    bool ok = false;
+  Future<void> save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('buyerBalance', buyerBalance);
+    await prefs.setInt('buyerSubsidyBalance', buyerSubsidyBalance);
+    await prefs.setInt('buyerEmergencyBalance', buyerEmergencyBalance);
+    await prefs.setInt('buyerCbdcBalance', buyerCbdcBalance);
+  }
+
+  void applyQrPaymentFromSource({required String source, required int amount}) {
     switch (source) {
-      case 'عادی':
-        if (buyerBalance >= amount) {
-          buyerBalance -= amount; ok = true;
-        }
-        break;
       case 'یارانه':
-        if (buyerSubsidy >= amount) {
-          buyerSubsidy -= amount; ok = true;
-        }
+        buyerSubsidyBalance -= amount;
         break;
       case 'اضطراری':
-        if (buyerEmergency >= amount) {
-          buyerEmergency -= amount; ok = true;
-        }
+        buyerEmergencyBalance -= amount;
         break;
-      case 'رمزارز':
       case 'رمز ارز ملی':
-        if (buyerCBDC >= amount) {
-          buyerCBDC -= amount; ok = true;
-        }
+        buyerCbdcBalance -= amount;
         break;
       default:
-        if (buyerBalance >= amount) {
-          buyerBalance -= amount; ok = true;
-        }
+        buyerBalance -= amount;
     }
-    return ok;
+    save();
   }
 }
