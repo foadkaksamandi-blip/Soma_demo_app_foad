@@ -1,16 +1,16 @@
 plugins {
-    id "com.android.application"
-    id "org.jetbrains.kotlin.android"
-    id "dev.flutter.flutter-gradle-plugin"
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'dev.flutter.flutter-gradle-plugin'
 }
 
 android {
-    namespace "com.soma.buyer_app"
+    namespace "ir.soma.demo.buyer"
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.soma.buyer_app"
-        minSdk 24
+        applicationId "ir.soma.demo.buyer"
+        minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
@@ -18,22 +18,20 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
-            shrinkResources false
             signingConfig signingConfigs.debug
+            shrinkResources false
+            minifyEnabled false
         }
     }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = '17'
     }
 }
 
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"
+flutter {
+    source '../..'
 }
