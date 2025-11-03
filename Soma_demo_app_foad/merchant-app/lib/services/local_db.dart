@@ -1,13 +1,24 @@
-// merchant-app/lib/services/local_db.dart
-/// Local in-memory DB (demo)
+import 'package:shared_preferences/shared_preferences.dart';
+
 class LocalDBMerchant {
   LocalDBMerchant._();
-  static final LocalDBMerchant instance = LocalDBMerchant._();
+  static final instance = LocalDBMerchant._();
 
-  int merchantBalance = 0;
+  String merchantId = 'merchant001';
+  int merchantBalance = 500000;
 
-  void addMerchantBalance(int delta) {
-    merchantBalance += delta;
-    if (merchantBalance < 0) merchantBalance = 0;
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    merchantBalance = prefs.getInt('merchantBalance') ?? 500000;
+  }
+
+  Future<void> save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('merchantBalance', merchantBalance);
+  }
+
+  void addBalance(int amount) {
+    merchantBalance += amount;
+    save();
   }
 }
