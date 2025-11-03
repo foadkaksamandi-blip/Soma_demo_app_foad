@@ -17,22 +17,31 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: "stable"
+          flutter-version: '3.24.3'
+          channel: 'stable'
+          cache: true
 
-      - name: Buyer - flutter pub get
+      - name: Buyer - pub get
         working-directory: Soma_demo_app_foad/buyer-app
         run: flutter pub get
 
-      - name: Buyer - add android platform
-        working-directory: Soma_demo_app_foad/buyer-app
-        run: flutter create --platforms=android .
+      - name: Merchant - pub get
+        working-directory: Soma_demo_app_foad/merchant-app
+        run: flutter pub get
 
-      - name: Buyer - inject Bluetooth permissions
+      - name: Buyer - inject Android permissions (Bluetooth + Camera)
         run: |
           MANIFEST="Soma_demo_app_foad/buyer-app/android/app/src/main/AndroidManifest.xml"
           echo "Injecting Bluetooth permissions into $MANIFEST"
-          perl -0777 -pe 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#s' -i $MANIFEST
-          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth" android:required="false"/>\n<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n\n$1#s' -i $MANIFEST
+          perl -0777 -pe 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#s' -i $MANIFEST
+          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n\n$1#s' -i $MANIFEST
+
+      - name: Merchant - inject Android permissions (Bluetooth + Camera)
+        run: |
+          MANIFEST="Soma_demo_app_foad/merchant-app/android/app/src/main/AndroidManifest.xml"
+          echo "Injecting Bluetooth permissions into $MANIFEST"
+          perl -0777 -pe 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#s' -i $MANIFEST
+          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n\n$1#s' -i $MANIFEST
 
       - name: Buyer - build apk (release)
         working-directory: Soma_demo_app_foad/buyer-app
@@ -43,21 +52,6 @@ jobs:
         with:
           name: buyer-app-apk
           path: Soma_demo_app_foad/buyer-app/build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Merchant - flutter pub get
-        working-directory: Soma_demo_app_foad/merchant-app
-        run: flutter pub get
-
-      - name: Merchant - add android platform
-        working-directory: Soma_demo_app_foad/merchant-app
-        run: flutter create --platforms=android .
-
-      - name: Merchant - inject Bluetooth permissions
-        run: |
-          MANIFEST="Soma_demo_app_foad/merchant-app/android/app/src/main/AndroidManifest.xml"
-          echo "Injecting Bluetooth permissions into $MANIFEST"
-          perl -0777 -pe 's#(<manifest[^>]*>)#$1\n    <uses-permission android:name="android.permission.BLUETOOTH"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>#s' -i $MANIFEST
-          perl -0777 -pe 's#(<application)#<uses-feature android:name="android.hardware.bluetooth" android:required="false"/>\n<uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>\n\n$1#s' -i $MANIFEST
 
       - name: Merchant - build apk (release)
         working-directory: Soma_demo_app_foad/merchant-app
