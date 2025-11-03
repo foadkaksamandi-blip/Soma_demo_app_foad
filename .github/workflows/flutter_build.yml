@@ -9,12 +9,8 @@ jobs:
     strategy:
       matrix:
         app:
-          - id: buyer
-            dir: Soma_demo_app_foad/buyer-app
-            artifact: buyer-app-release.apk
-          - id: merchant
-            dir: Soma_demo_app_foad/merchant-app
-            artifact: merchant-app-release.apk
+          - { id: buyer,    dir: Soma_demo_app_foad/buyer-app,    artifact: buyer-app-release.apk }
+          - { id: merchant, dir: Soma_demo_app_foad/merchant-app, artifact: merchant-app-release.apk }
 
     steps:
       - name: Checkout
@@ -24,27 +20,28 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
       - name: Setup Flutter (stable 3.24.x)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.3"
+          flutter-version: '3.24.3'
           channel: stable
           cache: true
 
       - name: Verify pubspec exists
         run: |
-          test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found" && exit 1)
+          test -f "${{ matrix.app.dir }}/pubspec.yaml" || { echo "❌ pubspec.yaml not found for ${{ matrix.app.id }}"; exit 1; }
 
       - name: Regenerate Android scaffold (safe)
         run: |
           APP_NAME="${{ matrix.app.id }}_app"
           SRC="${{ matrix.app.dir }}"
           TMP="/tmp/${APP_NAME}"
+
           rm -rf "$TMP"
-          flutter create --platforms android -t app $SRC --project-name ${APP_NAME} || true
-          rsync -a --delete "$TMP/android/" "$SRC/android/" || true
+          flutter create "$TMP" --project-name "$APP_NAME" --org app.soma --platforms=android
+          rsync -a --delete "$TMP/android/" "$SRC/android/"
           chmod +x "$SRC/android/gradlew"
           echo "✅ Android scaffold refreshed for ${APP_NAME}"
 
@@ -58,27 +55,115 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
-          # (script that searches and patches build.gradle / kts files to ensure compileSdkVersion etc.)
-          # ... (full patch script omitted here for brevity in this preview)
-          echo "✅ Patch step done"
+          # جستجوی محل کش pub
+          CANDIDATES=()
+          if [ -n "${PUB_CACHE:-}" ]; then
+            CANDIDATES+=("${PUB_CACHE#/}/hosted")
+          fi
+          CANDIDATES+=("$HOME/.pub-cache/hosted" "$HOME/.pub-cache/git")
+
+          FOUND_ROOT=""
+          for c in "${CANDIDATES[@]}"; do
+            if [ -d "$c" ]; then FOUND_ROOT="$c"; break; fi
+          done
+
+          if [ -z "$FOUND_ROOT" ]; then
+            echo "ℹ️ Pub cache not found. Skipping patch (not an error)."
+            exit 0
+          fi
+
+          # پیدا کردن پکیج‌های flutter_blue_plus*
+          mapfile -t PKGS < <(find "$FOUND_ROOT" -type d \( -name "flutter_blue_plus*" \))
+
+          if [ "${#PKGS[@]}" -eq 0 ]; then
+            echo "ℹ️ No flutter_blue_plus* packages in cache. Skipping patch."
+            exit 0
+          fi
+
+          patch_groovy () {
+            local f="$1"
+            [ -f "$f" ] || return 0
+            cp "$f" "$f.bak"
+
+            # اگر فایل برای flutter هست ولی بخش android ندارد → اضافه کن
+            if grep -q "flutter:" "$f" && ! grep -qE '^[[:space:]]*android[[:space:]]*{' "$f"; then
+              awk '
+                BEGIN { injected=0 }
+                /flutter[[:space:]]*{/ && !injected {
+                  print $0
+                  print "    android {"
+                  print "        minSdkVersion 21;"
+                  print "        targetSdkVersion 34;"
+                  print "        compileSdkVersion 34;"
+                  print "        ndkVersion \"25.1.8937393\";"
+                  print "    }"
+                  injected=1
+                  next
+                }
+                { print $0 }
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            fi
+
+            # اگر compileSdkVersion داخل android نیست → اضافه کن
+            if ! grep -qE '^[[:space:]]*compileSdk(V|v)ersion[[:space:]]*[:=][[:space:]]*34' "$f"; then
+              awk '
+                /android[[:space:]]*{/ { print; print "        compileSdkVersion 34"; next }
+                { print }
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            fi
+          }
+
+          patch_kts () {
+            local f="$1"
+            [ -f "$f" ] || return 0
+            cp "$f" "$f.bak"
+            # اضافه‌کردن compileSdk = 34
+            if ! grep -qE '^[[:space:]]*compileSdk[[:space:]]*[:=][[:space:]]*34' "$f"; then
+              awk '
+                /android[[:space:]]*{/ && !ins { print; print "    compileSdk = 34"; ins=1; next }
+                { print }
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            fi
+          }
+
+          ANY=0
+          for pkg in "${PKGS[@]}"; do
+            mapfile -t FILES < <(find "$pkg" -type f \( -name "build.gradle" -o -name "*.gradle" -o -name "*.gradle.kts" \))
+            if [ "${#FILES[@]}" -eq 0 ]; then
+              continue
+            fi
+            for f in "${FILES[@]}"; do
+              echo "🔧 Patching $f"
+              case "$f" in
+                *.kts) patch_kts "$f";;
+                *)     patch_groovy "$f";;
+              esac
+              echo "✅ Patched: $f"
+              ANY=1
+            done
+          done
+
+          if [ "$ANY" -eq 0 ]; then
+            echo "ℹ️ No eligible build.gradle files found to patch. Skipping."
+          fi
 
       - name: Build APK (release)
         working-directory: ${{ matrix.app.dir }}
         run: |
           flutter build apk --release
-          ls -lah build/app/outputs/flutter-apk/
+          ls -lah build/app/outputs/flutter-apk
 
       - name: Prepare artifact
         if: success()
         working-directory: ${{ matrix.app.dir }}
         run: |
           mkdir -p $GITHUB_WORKSPACE/artifacts/${{ matrix.app.id }}
-          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/artifacts/${{ matrix.app.id }}
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/artifacts/${{ matrix.app.id }}/${{ matrix.app.artifact }}
 
       - name: Upload APK artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.app.id }}.apk
-          path: artifacts/${{ matrix.app.id }}/app-release.apk
+          name: ${{ matrix.app.id }}_apk
+          path: artifacts/${{ matrix.app.id }}/${{ matrix.app.artifact }}
           if-no-files-found: error
