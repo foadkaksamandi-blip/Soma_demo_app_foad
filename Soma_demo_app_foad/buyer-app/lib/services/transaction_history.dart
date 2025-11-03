@@ -1,34 +1,24 @@
-import '../models/transaction_log.dart';
-import 'local_db.dart';
+import '../models/tx_log.dart';
 
-/// ثبت و بازیابی تاریخچه تراکنش‌ها (سمت خریدار)
 class TransactionHistoryService {
-  static final TransactionHistoryService _i = TransactionHistoryService._();
   TransactionHistoryService._();
-  factory TransactionHistoryService() => _i;
+  static final instance = TransactionHistoryService._();
 
-  Future<void> add({
-    required String method,
+  final List<TxLog> _logs = [];
+
+  Future<void> logBuyerQrPayment({
     required int amount,
-    required String wallet,
+    required String source,
+    required String merchantId,
   }) async {
-    final log = TransactionLog(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      method: method,
+    final tx = TxLog.success(
       amount: amount,
-      wallet: wallet,
-      createdAt: DateTime.now(),
+      source: source,
+      method: 'QR',
+      counterparty: merchantId,
     );
-    // ذخیره در DB لوکال (پیاده‌سازی LocalDB قبلاً موجود است)
-    LocalDB.instance.addTransaction(log.toJson());
+    _logs.add(tx);
   }
 
-  Future<List<TransactionLog>> getAll() async {
-    final list = LocalDB.instance.getTransactions();
-    return list.map((e) => TransactionLog.fromJson(e)).toList();
-  }
-
-  Future<void> clear() async {
-    LocalDB.instance.clearTransactions();
-  }
+  List<TxLog> get logs => List.unmodifiable(_logs);
 }
