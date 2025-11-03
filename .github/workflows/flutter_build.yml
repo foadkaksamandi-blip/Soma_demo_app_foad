@@ -9,8 +9,12 @@ jobs:
     strategy:
       matrix:
         app:
-          - { id: buyer,    dir: Soma_demo_app_foad/buyer-app,    artifact: buyer-app-release.apk }
-          - { id: merchant, dir: Soma_demo_app_foad/merchant-app, artifact: merchant-app-release.apk }
+          - id: buyer
+            dir: Soma_demo_app_foad/buyer-app
+            artifact: buyer-app-release.apk
+          - id: merchant
+            dir: Soma_demo_app_foad/merchant-app
+            artifact: merchant-app-release.apk
 
     steps:
       - name: Checkout
@@ -73,70 +77,79 @@ jobs:
           fi
 
           # پیدا کردن پکیج‌های flutter_blue_plus*
-          mapfile -t PKGS < <(find "$FOUND_ROOT" -type d \( -name "flutter_blue_plus*" \))
+          mapfile -t PKGS < <(find "$FOUND_ROOT" -type d \( -name "flutter_blue_plus*" -o -name "flutter_blue_plus_android*" \) 2>/dev/null | sort || true)
 
           if [ "${#PKGS[@]}" -eq 0 ]; then
             echo "ℹ️ No flutter_blue_plus* packages in cache. Skipping patch."
             exit 0
           fi
 
-          patch_groovy () {
+          patch_groovy() {
             local f="$1"
             [ -f "$f" ] || return 0
             cp "$f" "$f.bak"
 
-            # اگر فایل برای flutter هست ولی بخش android ندارد → اضافه کن
-            if grep -q "flutter:" "$f" && ! grep -qE '^[[:space:]]*android[[:space:]]*{' "$f"; then
+            # اگر ارجاع flutter.* هست ولی آبجکت flutter تعریف نشده، map تزریق کن
+            if grep -q "flutter\." "$f" && ! grep -qE '(^|[^A-Za-z0-9_])def[[:space:]]+flutter[[:space:]]*=' "$f"; then
               awk '
                 BEGIN { injected=0 }
-                /flutter[[:space:]]*{/ && !injected {
+                {
+                  if (!injected && $0 ~ /^[[:space:]]*android[[:space:]]*\{/ ) {
+                    print "    def flutter = ["
+                    print "        minSdkVersion    : 21,"
+                    print "        targetSdkVersion : 34,"
+                    print "        compileSdkVersion: 34,"
+                    print "        ndkVersion       : \"25.1.8937393\""
+                    print "    ]"
+                    injected=1
+                  }
                   print $0
-                  print "    android {"
-                  print "        minSdkVersion 21;"
-                  print "        targetSdkVersion 34;"
-                  print "        compileSdkVersion 34;"
-                  print "        ndkVersion \"25.1.8937393\";"
-                  print "    }"
-                  injected=1
+                }
+              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            fi
+
+            # اگر compileSdkVersion داخل android نیست → اضافه کن
+            if ! grep -qE 'compileSdk(V|v)ersion[[:space:]]*[^0-9]*34' "$f"; then
+              awk '
+                /android[[:space:]]*\{/ && !done {
+                  print $0
+                  print "    compileSdkVersion 34"
+                  done=1
                   next
                 }
                 { print $0 }
               ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
             fi
-
-            # اگر compileSdkVersion داخل android نیست → اضافه کن
-            if ! grep -qE '^[[:space:]]*compileSdk(V|v)ersion[[:space:]]*[:=][[:space:]]*34' "$f"; then
-              awk '
-                /android[[:space:]]*{/ { print; print "        compileSdkVersion 34"; next }
-                { print }
-              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-            fi
           }
 
-          patch_kts () {
+          patch_kts() {
             local f="$1"
             [ -f "$f" ] || return 0
             cp "$f" "$f.bak"
-            # اضافه‌کردن compileSdk = 34
-            if ! grep -qE '^[[:space:]]*compileSdk[[:space:]]*[:=][[:space:]]*34' "$f"; then
+            if ! grep -qE 'compileSdk[[:space:]]*=[[:space:]]*34' "$f"; then
               awk '
-                /android[[:space:]]*{/ && !ins { print; print "    compileSdk = 34"; ins=1; next }
-                { print }
+                /android[[:space:]]*\{/ && !done {
+                  print $0
+                  print "    compileSdk = 34"
+                  done=1
+                  next
+                }
+                { print $0 }
               ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
             fi
           }
 
           ANY=0
           for pkg in "${PKGS[@]}"; do
-            mapfile -t FILES < <(find "$pkg" -type f \( -name "build.gradle" -o -name "*.gradle" -o -name "*.gradle.kts" \))
+            mapfile -t FILES < <(find "$pkg" -type f \( -name "build.gradle" -o -name "*.gradle" -o -name "*.gradle.kts" \) 2>/dev/null | sort || true)
             if [ "${#FILES[@]}" -eq 0 ]; then
               continue
             fi
             for f in "${FILES[@]}"; do
               echo "🔧 Patching $f"
               case "$f" in
-                *.kts) patch_kts "$f";;
-                *)     patch_groovy "$f";;
+                *.kts) patch_kts "$f" ;;
+                *)     patch_groovy "$f" ;;
               esac
               echo "✅ Patched: $f"
               ANY=1
@@ -164,6 +177,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.app.id }}_apk
+          name: ${{ matrix.app.id }}.apk
           path: artifacts/${{ matrix.app.id }}/${{ matrix.app.artifact }}
           if-no-files-found: error
