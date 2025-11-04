@@ -1,16 +1,22 @@
-// buyer-app/lib/services/permissions.dart
-/// Helper ساده برای اجازه‌ها (بی‌نیاز از وابستگی خارجی برای حفظ بیلد سبز).
-/// در فاز بعدی، این متدها با permission_handler یا PlatformChannel تکمیل می‌شوند.
-class AppPermissions {
-  AppPermissions._();
+import 'package:permission_handler/permission_handler.dart';
 
-  /// اجازهٔ دوربین برای اسکن QR (فعلاً true تا دمو جلو بره)
-  static Future<bool> ensureCamera() async {
-    return true;
+class PermissionService {
+  static Future<bool> ensureBluetooth() async {
+    final statuses = await [
+      Permission.bluetooth,
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+    ].request();
+    return statuses.values.every((s) => s.isGranted);
   }
 
-  /// اجازه‌های لازم برای Bluetooth (فعلاً true تا دمو جلو بره)
-  static Future<bool> ensureBluetooth() async {
-    return true;
+  static Future<bool> ensureCamera() async {
+    final status = await Permission.camera.request();
+    return status.isGranted;
+  }
+
+  static Future<bool> ensureLocation() async {
+    final status = await Permission.locationWhenInUse.request();
+    return status.isGranted;
   }
 }
