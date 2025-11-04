@@ -1,37 +1,10 @@
-# Flutter/Dart/Pub related
-.dart_tool/
-.packages
-.pub-cache/
-build/
-flutter_*.png
-pubspec.lock
-
-# Android related
-**/android/.gradle/
-**/android/.idea/
-**/android/local.properties
-**/android/app/*.keystore
-**/android/app/*.jks
-**/android/app/key.properties
-**/android/captures/
-**/android/**/GeneratedPluginRegistrant.java
-**/android/**/GeneratedPluginRegistrant.kt
-
-# iOS (not used, but keep clean)
-**/ios/.generated/
-**/ios/Flutter/Generated.xcconfig
-**/ios/Flutter/flutter_export_environment.sh
-**/ios/Pods/
-**/ios/Runner/GeneratedPluginRegistrant.*
-
-# IDEs
-.vscode/
-.idea/
-*.iml
-
-# Misc
-.DS_Store
-Thumbs.db
+# Miscellaneous
+*.class
+*.lock
 *.log
-*.tmp
+*.pyc
 *.swp
+.buildlog/
+.history
+...
+!/dev/ci/**/Gemfile.lock
