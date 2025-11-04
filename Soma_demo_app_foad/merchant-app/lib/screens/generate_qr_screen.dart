@@ -32,7 +32,7 @@ class _GenerateQrScreenState extends State<GenerateQrScreen> {
             const SizedBox(height: 16),
             if (generatedData != null)
               QrImage(
-                data: generatedData!, // ✅ پارامتر الزامی اضافه شد
+                data: generatedData!, // 👈 این خط حیاتی است
                 version: QrVersions.auto,
                 size: 200,
               ),
