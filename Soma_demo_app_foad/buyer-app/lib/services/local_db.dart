@@ -1,44 +1,28 @@
+// File: buyer-app/lib/services/local_db.dart
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/tx_log.dart';
 
 class LocalDB {
-  LocalDB._();
-  static final instance = LocalDB._();
+  static const _key = 'txn_logs';
 
-  int buyerBalance = 800000;
-  int buyerSubsidyBalance = 200000;
-  int buyerEmergencyBalance = 150000;
-  int buyerCbdcBalance = 300000;
-
-  Future<void> load() async {
+  Future<void> saveLog(TxLog log) async {
     final prefs = await SharedPreferences.getInstance();
-    buyerBalance = prefs.getInt('buyerBalance') ?? 800000;
-    buyerSubsidyBalance = prefs.getInt('buyerSubsidyBalance') ?? 200000;
-    buyerEmergencyBalance = prefs.getInt('buyerEmergencyBalance') ?? 150000;
-    buyerCbdcBalance = prefs.getInt('buyerCbdcBalance') ?? 300000;
+    final list = prefs.getStringList(_key) ?? [];
+    list.add(jsonEncode(log.toMap()));
+    await prefs.setStringList(_key, list);
   }
 
-  Future<void> save() async {
+  Future<List<TxLog>> getLogs() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('buyerBalance', buyerBalance);
-    await prefs.setInt('buyerSubsidyBalance', buyerSubsidyBalance);
-    await prefs.setInt('buyerEmergencyBalance', buyerEmergencyBalance);
-    await prefs.setInt('buyerCbdcBalance', buyerCbdcBalance);
+    final list = prefs.getStringList(_key) ?? [];
+    return list
+        .map((e) => TxLog.fromMap(Map<String, String>.from(jsonDecode(e))))
+        .toList();
   }
 
-  void applyQrPaymentFromSource({required String source, required int amount}) {
-    switch (source) {
-      case 'یارانه':
-        buyerSubsidyBalance -= amount;
-        break;
-      case 'اضطراری':
-        buyerEmergencyBalance -= amount;
-        break;
-      case 'رمز ارز ملی':
-        buyerCbdcBalance -= amount;
-        break;
-      default:
-        buyerBalance -= amount;
-    }
-    save();
+  Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
   }
 }
