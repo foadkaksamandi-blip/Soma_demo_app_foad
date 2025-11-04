@@ -2,26 +2,25 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 
 void main() {
-  runApp(const MerchantApp());
+  runApp(const SomaMerchantApp());
 }
 
-class MerchantApp extends StatelessWidget {
-  const MerchantApp({super.key});
+const _green = Color(0xFF1E8449);
+
+class SomaMerchantApp extends StatelessWidget {
+  const SomaMerchantApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'اپ آفلاین سوما — فروشنده',
       debugShowCheckedModeBanner: false,
-      title: 'SOMA Merchant App',
       theme: ThemeData(
-        primarySwatch: Colors.green,
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: _green),
+        scaffoldBackgroundColor: const Color(0xFFF5F9F6),
+        useMaterial3: true,
       ),
-      home: const HomeScreen(),
+      home: const MerchantHomePage(),
     );
   }
 }
