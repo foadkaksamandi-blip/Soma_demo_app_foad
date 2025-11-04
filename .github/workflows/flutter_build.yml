@@ -1,69 +1,84 @@
-name: Build (buyer, merchant)
+name: Build Buyer & Merchant APK (release)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
-  build_merchant:
-    name: build (merchant, Soma_demo_app_foad/merchant-app)
+  build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Soma_demo_app_foad/merchant-app
+    strategy:
+      matrix:
+        app:
+          - id: buyer
+            dir: Soma_demo_app_foad/buyer-app
+            artifact: buyer-app-release.apk
+          - id: merchant
+            dir: Soma_demo_app_foad/merchant-app
+            artifact: merchant-app-release.apk
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Java (JDK 17)
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: "17"
 
       - name: Setup Flutter (stable 3.24.x)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.x'
+          flutter-version: "3.24.3"
+          channel: stable
+          cache: true
 
-      - name: Clean Flutter cache
-        run: flutter clean
+      - name: Verify pubspec exists
+        run: |
+          test -f "${{ matrix.app.dir }}/pubspec.yaml" || (echo "❌ pubspec.yaml not found" && exit 1)
 
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Build APK (release)
-        run: flutter build apk --release
-
-  build_buyer:
-    name: build (buyer, Soma_demo_app_foad/buyer-app)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: Soma_demo_app_foad/buyer-app
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Java (JDK 17)
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Flutter (stable 3.24.x)
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.24.x'
-
-      - name: Clean Flutter cache
-        run: flutter clean
+      - name: Regenerate Android scaffold (safe)
+        run: |
+          APP_NAME="${{ matrix.app.id }}_app"
+          SRC="${{ matrix.app.dir }}"
+          TMP="/tmp/${APP_NAME}"
+          rm -rf "$TMP"
+          flutter create --platforms android --org ir.soma.demo --project-name ${APP_NAME} "$TMP"
+          rsync -a --delete "$TMP/android/" "$SRC/android/"
+          chmod +x "$SRC/android/gradlew"
+          echo "✅ Android scaffold refreshed for ${APP_NAME}"
 
       - name: Get dependencies
+        working-directory: ${{ matrix.app.dir }}
         run: flutter pub get
 
+      - name: Patch flutter_blue_plus* (Groovy/KTS) for AGP 8
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          ...
+          if [ "$ANY" -eq 0 ]; then
+            echo "ℹ️ No eligible build.gradle files found to patch. Skipping."
+          fi
+
       - name: Build APK (release)
-        run: flutter build apk --release
+        working-directory: ${{ matrix.app.dir }}
+        run: |
+          flutter build apk --release
+          ls -lah build/app/outputs/flutter-apk
+
+      - name: Prepare artifact
+        if: success()
+        working-directory: ${{ matrix.app.dir }}
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/artifacts/${{ matrix.app.id }}
+          cp build/app/outputs/flutter-apk/app-release.apk $GITHUB_WORKSPACE/artifacts/${{ matrix.app.id }}/${{ matrix.app.artifact }}
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app.id }}.apk
+          path: artifacts/${{ matrix.app.id }}/${{ matrix.app.artifact }}
+          if-no-files-found: error
