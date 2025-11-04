@@ -1,24 +1,32 @@
-import 'local_db.dart';
-import '../models/tx_log.dart';
+import 'package:uuid/uuid.dart';
 
-class TransactionServiceMerchant {
-  TransactionServiceMerchant._();
-  static final instance = TransactionServiceMerchant._();
+class MerchantReceipt {
+  final String id;
+  final double amount;
+  final String method;
+  final DateTime timestamp;
 
-  Future<void> applyQrReceive({
-    required LocalDBMerchant db,
-    required int amount,
-  }) async {
-    db.addBalance(amount);
-    final tx = TxLog.success(
+  MerchantReceipt({
+    required this.id,
+    required this.amount,
+    required this.method,
+    required this.timestamp,
+  });
+}
+
+class MerchantService {
+  double merchantBalance = 2500000;
+  MerchantReceipt? lastReceipt;
+
+  bool acceptPayment({required double amount, required String method}) {
+    if (amount <= 0) return false;
+    merchantBalance += amount;
+    lastReceipt = MerchantReceipt(
+      id: const Uuid().v4(),
       amount: amount,
-      source: 'QR',
-      method: 'QR',
-      counterparty: 'buyer',
+      method: method,
+      timestamp: DateTime.now(),
     );
-    _logs.add(tx);
+    return true;
   }
-
-  final List<TxLog> _logs = [];
-  List<TxLog> get logs => List.unmodifiable(_logs);
 }
