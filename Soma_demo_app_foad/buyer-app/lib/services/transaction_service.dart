@@ -1,102 +1,34 @@
-import 'dart:convert';
-import 'package:uuid/uuid.dart';
-
-class TxReceipt {
-  final String id;
-  final double amount;
-  final String method; // bluetooth | qr
-  final String source; // balance | subsidy | emergency | crypto
-  final DateTime timestamp;
-
-  TxReceipt({
-    required this.id,
-    required this.amount,
-    required this.method,
-    required this.source,
-    required this.timestamp,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'amount': amount,
-        'method': method,
-        'source': source,
-        'timestamp': timestamp.toIso8601String(),
-      };
-
-  static TxReceipt fromJson(Map<String, dynamic> j) => TxReceipt(
-        id: j['id'] as String,
-        amount: (j['amount'] as num).toDouble(),
-        method: j['method'] as String,
-        source: j['source'] as String,
-        timestamp: DateTime.parse(j['timestamp'] as String),
-      );
-}
+import '../models/tx_log.dart';
+import 'bluetooth_service.dart';
+import 'qr_service.dart';
+import 'transaction_history.dart';
 
 class TransactionService {
-  double buyerBalance = 5000000;
-  double subsidyBalance = 1500000;
-  double emergencyBalance = 800000;
-  double cryptoBalance = 2500000;
+  final BluetoothService _bt = BluetoothService();
+  final TransactionHistoryService _history = TransactionHistoryService();
 
-  TxReceipt? lastReceipt;
-
-  String generateQrPayload(double amount) {
-    final data = {
-      'id': const Uuid().v4(),
-      'amount': amount,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-    return jsonEncode(data);
+  Future<TxLog> performBluetoothPayment(int amount, String source) async {
+    await _bt.connectToMerchant();
+    final id = await _bt.sendPayment(amount);
+    final log = TxLog.success(
+      amount: amount,
+      source: source,
+      method: 'Bluetooth',
+      counterparty: 'merchant',
+    );
+    await _history.add(log);
+    await _bt.disconnect();
+    return log;
   }
 
-  bool applyPayment({
-    required double amount,
-    required String method, // bluetooth | qr
-    required String source, // balance | subsidy | emergency | crypto
-  }) {
-    if (amount <= 0) return false;
-
-    double sourceBalance() {
-      switch (source) {
-        case 'subsidy':
-          return subsidyBalance;
-        case 'emergency':
-          return emergencyBalance;
-        case 'crypto':
-          return cryptoBalance;
-        default:
-          return buyerBalance;
-      }
-    }
-
-    void setSourceBalance(double v) {
-      switch (source) {
-        case 'subsidy':
-          subsidyBalance = v;
-          return;
-        case 'emergency':
-          emergencyBalance = v;
-          return;
-        case 'crypto':
-          cryptoBalance = v;
-          return;
-        default:
-          buyerBalance = v;
-      }
-    }
-
-    if (sourceBalance() < amount) return false;
-
-    setSourceBalance(sourceBalance() - amount);
-
-    lastReceipt = TxReceipt(
-      id: const Uuid().v4(),
+  Future<TxLog> performQrPayment(int amount, String source) async {
+    final tx = TxLog.success(
       amount: amount,
-      method: method,
       source: source,
-      timestamp: DateTime.now(),
+      method: 'QR',
+      counterparty: 'merchant',
     );
-    return true;
+    await _history.add(tx);
+    return tx;
   }
 }
