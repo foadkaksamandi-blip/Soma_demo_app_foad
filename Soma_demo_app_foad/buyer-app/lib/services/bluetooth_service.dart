@@ -1,41 +1,23 @@
+// File: buyer-app/lib/services/bluetooth_service.dart
 import 'dart:async';
-import 'dart:convert';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
-/// سرویس ساده برای اتصال، ارسال و دریافت پیام (UTF8) از طریق Bluetooth RFCOMM
 class BluetoothService {
-  static final BluetoothService _i = BluetoothService._();
-  BluetoothService._();
-  factory BluetoothService() => _i;
+  bool _connected = false;
+  bool get isConnected => _connected;
 
-  BluetoothConnection? _conn;
-  final _stream = StreamController<String>.broadcast();
-
-  Stream<String> get onData => _stream.stream;
-  bool get isConnected => _conn?.isConnected ?? false;
-
-  Future<bool> connect(String address) async {
-    try {
-      _conn = await BluetoothConnection.toAddress(address);
-      _conn!.input?.listen((data) {
-        final msg = utf8.decode(data);
-        _stream.add(msg);
-      }, onDone: () => disconnect());
-      return true;
-    } catch (_) {
-      return false;
-    }
+  Future<void> connectToMerchant() async {
+    await Future.delayed(const Duration(seconds: 1));
+    _connected = true;
   }
 
-  Future<void> sendJson(Map<String, dynamic> json) async {
-    if (!isConnected) return;
-    final line = jsonEncode(json) + '\n';
-    _conn!.output.add(utf8.encode(line));
-    await _conn!.output.allSent;
+  Future<void> disconnect() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    _connected = false;
   }
 
-  void disconnect() {
-    _conn?.dispose();
-    _conn = null;
+  Future<String> sendPayment(int amount) async {
+    if (!_connected) throw Exception('Bluetooth not connected');
+    await Future.delayed(const Duration(milliseconds: 700));
+    return 'TXN-${DateTime.now().millisecondsSinceEpoch}';
   }
 }
