@@ -1,24 +1,27 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/tx_log.dart';
 
-class LocalDBMerchant {
-  LocalDBMerchant._();
-  static final instance = LocalDBMerchant._();
+class LocalDB {
+  static const _key = 'merchant_txn_logs';
 
-  String merchantId = 'merchant001';
-  int merchantBalance = 500000;
-
-  Future<void> load() async {
+  Future<void> save(TxLog log) async {
     final prefs = await SharedPreferences.getInstance();
-    merchantBalance = prefs.getInt('merchantBalance') ?? 500000;
+    final list = prefs.getStringList(_key) ?? [];
+    list.add(jsonEncode(log.toMap()));
+    await prefs.setStringList(_key, list);
   }
 
-  Future<void> save() async {
+  Future<List<TxLog>> getAll() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('merchantBalance', merchantBalance);
+    final list = prefs.getStringList(_key) ?? [];
+    return list
+        .map((e) => TxLog.fromMap(Map<String, String>.from(jsonDecode(e))))
+        .toList();
   }
 
-  void addBalance(int amount) {
-    merchantBalance += amount;
-    save();
+  Future<void> clear() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
   }
 }
