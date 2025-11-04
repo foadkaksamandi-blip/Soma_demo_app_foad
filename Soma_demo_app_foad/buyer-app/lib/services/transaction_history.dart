@@ -1,24 +1,16 @@
 import '../models/tx_log.dart';
+import 'local_db.dart';
 
 class TransactionHistoryService {
-  TransactionHistoryService._();
-  static final instance = TransactionHistoryService._();
+  final LocalDB _db = LocalDB();
 
-  final List<TxLog> _logs = [];
+  Future<List<TxLog>> getAll() => _db.getLogs();
 
-  Future<void> logBuyerQrPayment({
-    required int amount,
-    required String source,
-    required String merchantId,
-  }) async {
-    final tx = TxLog.success(
-      amount: amount,
-      source: source,
-      method: 'QR',
-      counterparty: merchantId,
-    );
-    _logs.add(tx);
+  Future<void> add(TxLog log) async {
+    await _db.saveLog(log);
   }
 
-  List<TxLog> get logs => List.unmodifiable(_logs);
+  Future<void> clear() async {
+    await _db.clear();
+  }
 }
